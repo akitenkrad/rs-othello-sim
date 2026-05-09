@@ -1,6 +1,9 @@
 //! `othello-cli` のサブコマンド群．
 
+pub mod convert;
+pub mod inspect;
 pub mod play;
+pub mod replay;
 pub mod simulate;
 
 use othello_core::{Color, Coord, GameState, Move};

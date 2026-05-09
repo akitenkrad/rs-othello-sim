@@ -17,6 +17,7 @@ proptest! {
             game_id: None,
             max_moves: Some(200),
             log_callback: None,
+            jsonl_logger: None,
         }).unwrap();
         let mut b = RandomPlayer::with_seed(Color::Black, seed_b);
         let mut w = RandomPlayer::with_seed(Color::White, seed_w);

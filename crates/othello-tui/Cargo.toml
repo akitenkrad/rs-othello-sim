@@ -1,15 +1,15 @@
 [package]
-name = "othello-cli"
+name = "othello-tui"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "rs-othello-sim の CLI フロントエンド ( play, simulate サブコマンド)"
+description = "rs-othello-sim の TUI フロントエンド ( ratatui ベース，play/replay モード)"
 
 [[bin]]
-name = "othello-cli"
+name = "othello-tui"
 path = "src/main.rs"
 
 [dependencies]
@@ -17,9 +17,10 @@ othello-core = { workspace = true }
 othello-player = { workspace = true }
 othello-engine = { workspace = true }
 othello-io = { workspace = true }
-othello-tui = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
-serde_json = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }

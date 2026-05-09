@@ -2,14 +2,17 @@
 
 use crate::history::GameHistory;
 use chrono::{DateTime, FixedOffset, Local, Offset, Utc};
-use othello_core::{BoardSize, GameResult, GameState, Move, OthelloError};
+use othello_core::{BoardSize, Color, GameResult, GameState, Move, OthelloError};
 use othello_io::{
-    GameMetadata, GameRecord, GameResultRecord, MoveEntry, PlayerPair, SCHEMA_VERSION, Score,
+    GameEndEvent, GameMetadata, GameRecord, GameResultRecord, GameStartEvent, JsonlLogger,
+    MoveEntry, MoveEvent, PassEvent, PlayerInfo, PlayerNames, PlayerPair, SCHEMA_VERSION, Score,
+    Stones,
 };
 use othello_player::{Player, PlayerError};
 use thiserror::Error;
+use tracing::{debug, info, info_span};
 
-/// 着手ごとに呼ばれるロギングコールバックの型．Phase 3 の `tracing` 統合までの暫定 API．
+/// 着手ごとに呼ばれるロギングコールバックの型．Phase 3 の `tracing` 統合と並存する後方互換 API．
 pub type LogCallback = Box<dyn FnMut(&str) + Send>;
 
 /// `GameEngine` 設定．
@@ -20,8 +23,11 @@ pub struct EngineConfig {
     pub game_id: Option<String>,
     /// 安全装置: この手数を超えたら強制終了する ( デフォルト `None` で無制限)．
     pub max_moves: Option<u32>,
-    /// 着手ごとのコールバック ( ロギング用，Phase 3 の `tracing` への置き換え予定)．
+    /// 着手ごとのコールバック ( ロギング用，後方互換 API)．
     pub log_callback: Option<LogCallback>,
+    /// JSONL ロガー ( Phase 3 で追加)．設定すると `game_start` / `move` / `pass` / `game_end` を
+    /// 設計書 §4.2 のフォーマットで書き出す．
+    pub jsonl_logger: Option<JsonlLogger>,
 }
 
 impl std::fmt::Debug for EngineConfig {
@@ -31,6 +37,7 @@ impl std::fmt::Debug for EngineConfig {
             .field("game_id", &self.game_id)
             .field("max_moves", &self.max_moves)
             .field("log_callback", &self.log_callback.as_ref().map(|_| "<fn>"))
+            .field("jsonl_logger", &self.jsonl_logger)
             .finish()
     }
 }
@@ -42,6 +49,7 @@ impl Default for EngineConfig {
             game_id: None,
             max_moves: None,
             log_callback: None,
+            jsonl_logger: None,
         }
     }
 }
@@ -88,6 +96,10 @@ pub enum EngineError {
     /// プレイヤーが合法手を持つのに `Move::Pass` を返した．
     #[error("player attempted to pass while legal moves exist")]
     UnexpectedPass,
+
+    /// JSONL ロガー書き込み失敗．
+    #[error("jsonl logger error: {0}")]
+    Logger(#[from] othello_io::IoError),
 }
 
 /// 1 局を実行するゲームエンジン．
@@ -113,23 +125,71 @@ impl GameEngine {
         })
     }
 
-    /// 1 局を実行する．
+    /// 1 局を実行する ( 既存 API)．
     ///
     /// アルゴリズムは設計書 §3.3.3 の pseudocode に従う．
     /// プレイヤーが合法手を持つのに Pass を返した場合は [`EngineError::UnexpectedPass`]．
     /// 合法手が無い ( pass しか取れない) 場合は engine 側で `Move::Pass` を強制する．
+    ///
+    /// JSONL ロガー / tracing スパンは内部の `players` 情報を `<unknown>` として記録する．
+    /// プレイヤー名を含めて出力したい場合は [`Self::run_with_meta`] を使う．
     pub fn run<B: Player, W: Player>(
         &mut self,
         black: &mut B,
         white: &mut W,
     ) -> Result<GameResult, EngineError> {
+        self.run_with_meta(
+            black,
+            white,
+            PlayerPair {
+                black: PlayerInfo::just_name("<unknown>"),
+                white: PlayerInfo::just_name("<unknown>"),
+            },
+        )
+    }
+
+    /// 1 局を実行し，JSONL/tracing にプレイヤー名を渡せる版．
+    pub fn run_with_meta<B: Player, W: Player>(
+        &mut self,
+        black: &mut B,
+        white: &mut W,
+        players: PlayerPair,
+    ) -> Result<GameResult, EngineError> {
         black.reset();
         white.reset();
 
         self.started_at = now();
-        self.log(&format!(
-            "game_start id={} board={:?}",
-            self.game_id_or_unset(),
+
+        let game_id = self.game_id_or_uuid();
+        let span = info_span!(
+            "game",
+            id = %game_id,
+            rows = self.config.board_size.rows,
+            cols = self.config.board_size.cols,
+        );
+        let _enter = span.enter();
+        info!(
+            event = "game_start",
+            black = %players.black.name,
+            white = %players.white.name,
+            "game start"
+        );
+
+        // JSONL: game_start
+        if let Some(logger) = self.config.jsonl_logger.as_mut() {
+            logger.log_game_start(&GameStartEvent {
+                ts: self.started_at,
+                game_id: game_id.clone(),
+                board_size: [self.config.board_size.rows, self.config.board_size.cols],
+                players: PlayerNames {
+                    black: players.black.name.clone(),
+                    white: players.white.name.clone(),
+                },
+            })?;
+        }
+
+        self.log_text(&format!(
+            "game_start id={game_id} board={:?}",
             self.config.board_size
         ));
 
@@ -143,6 +203,8 @@ impl GameEngine {
 
             // 合法手なし → Engine が Pass を強制
             let must_pass = self.state.legal_moves().is_empty();
+            let side_pre = self.state.side_to_move;
+            let legal_count = self.state.legal_moves().len() as u32;
             let mv: Move = if must_pass {
                 Move::Pass
             } else {
@@ -151,7 +213,6 @@ impl GameEngine {
                 } else if self.state.side_to_move == white.color() {
                     white
                 } else {
-                    // 黒白の color が揃っていない設定 ( 両方 Black など) は不正
                     return Err(EngineError::Config(format!(
                         "no player matches side_to_move={:?} (black={:?}, white={:?})",
                         self.state.side_to_move,
@@ -169,10 +230,55 @@ impl GameEngine {
             // 適用
             self.state.apply_move(mv)?;
             self.history.push(mv, self.state.clone());
-            self.log(&format!(
-                "move n={} side={:?} mv={:?}",
-                self.state.move_number, self.state.last_move, mv
-            ));
+
+            let stones = Stones {
+                black: self.state.board.count(Color::Black),
+                white: self.state.board.count(Color::White),
+            };
+
+            // tracing + JSONL
+            let n = self.state.move_number;
+            let ts = now();
+            match mv {
+                Move::Place(c) => {
+                    debug!(
+                        event = "move",
+                        n,
+                        side = ?side_pre,
+                        move_row = c.row,
+                        move_col = c.col,
+                        legal_count,
+                        "place"
+                    );
+                    if let Some(logger) = self.config.jsonl_logger.as_mut() {
+                        logger.log_move(&MoveEvent {
+                            ts,
+                            game_id: game_id.clone(),
+                            n,
+                            side: side_pre,
+                            r#move: mv.into(),
+                            stones,
+                            legal_count,
+                        })?;
+                    }
+                    self.log_text(&format!(
+                        "move n={n} side={side_pre:?} mv={mv:?} stones=({},{})",
+                        stones.black, stones.white
+                    ));
+                }
+                Move::Pass => {
+                    debug!(event = "pass", n, side = ?side_pre, "pass");
+                    if let Some(logger) = self.config.jsonl_logger.as_mut() {
+                        logger.log_pass(&PassEvent {
+                            ts,
+                            game_id: game_id.clone(),
+                            n,
+                            side: side_pre,
+                        })?;
+                    }
+                    self.log_text(&format!("pass n={n} side={side_pre:?}"));
+                }
+            }
         }
 
         let result = self
@@ -180,12 +286,33 @@ impl GameEngine {
             .result()
             .expect("terminal state must have result");
         self.ended_at = Some(now());
-        self.log(&format!(
-            "game_end id={} winner={:?} score=({},{})",
-            self.game_id_or_unset(),
-            result.winner,
-            result.black,
-            result.white
+
+        info!(
+            event = "game_end",
+            winner = ?result.winner,
+            black = result.black,
+            white = result.white,
+            moves_total = result.total_moves,
+            "game end"
+        );
+
+        if let Some(logger) = self.config.jsonl_logger.as_mut() {
+            logger.log_game_end(&GameEndEvent {
+                ts: self.ended_at.unwrap(),
+                game_id: game_id.clone(),
+                winner: result.winner,
+                stones: Stones {
+                    black: result.black,
+                    white: result.white,
+                },
+                moves_total: result.total_moves,
+            })?;
+            logger.flush()?;
+        }
+
+        self.log_text(&format!(
+            "game_end id={game_id} winner={:?} score=({},{})",
+            result.winner, result.black, result.white
         ));
 
         black.on_game_end(&self.state, result);
@@ -247,14 +374,10 @@ impl GameEngine {
             .zip(self.history.snapshots().iter().skip(1))
             .enumerate()
         {
-            // post.last_move == *mv のはず
-            // post.move_number は適用後の値．適用後 = 「`i+1` 番目の手まで終わった状態」
             moves.push(MoveEntry {
                 n: (i + 1) as u32,
-                // 適用後 side_to_move は相手なので元の手番は反転
                 side: post.side_to_move.opponent(),
                 r#move: *mv,
-                // engine 側で着手時刻は記録していないので started_at を流用
                 ts: self.started_at,
             });
         }
@@ -266,14 +389,17 @@ impl GameEngine {
         }
     }
 
-    fn log(&mut self, msg: &str) {
+    fn log_text(&mut self, msg: &str) {
         if let Some(cb) = self.config.log_callback.as_mut() {
             cb(msg);
         }
     }
 
-    fn game_id_or_unset(&self) -> &str {
-        self.config.game_id.as_deref().unwrap_or("(unset)")
+    fn game_id_or_uuid(&self) -> String {
+        self.config
+            .game_id
+            .clone()
+            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
     }
 }
 
@@ -334,10 +460,53 @@ mod tests {
     #[test]
     fn config_with_swapped_player_colors_errors() {
         let mut engine = GameEngine::new(EngineConfig::standard()).unwrap();
-        // 両方 Black 色に設定
         let mut black = RandomPlayer::with_seed(Color::Black, 1);
         let mut wrong_white = RandomPlayer::with_seed(Color::Black, 2);
         let r = engine.run(&mut black, &mut wrong_white);
         assert!(matches!(r, Err(EngineError::Config(_))));
+    }
+
+    #[test]
+    fn jsonl_logger_emits_start_move_end() {
+        // Cursor<Vec<u8>> 経由ではなく，一時ファイルに書いて行数確認．
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!(
+            "rs-othello-sim-engine-jsonl-{}.jsonl",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        {
+            let logger = JsonlLogger::to_path(&path).unwrap();
+            let mut config = EngineConfig::standard();
+            config.jsonl_logger = Some(logger);
+            let mut engine = GameEngine::new(config).unwrap();
+            let mut black = RandomPlayer::with_seed(Color::Black, 1);
+            let mut white = RandomPlayer::with_seed(Color::White, 2);
+            engine
+                .run_with_meta(
+                    &mut black,
+                    &mut white,
+                    PlayerPair {
+                        black: PlayerInfo::just_name("RandomPlayer"),
+                        white: PlayerInfo::just_name("RandomPlayer"),
+                    },
+                )
+                .unwrap();
+        }
+        let contents = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = contents.lines().collect();
+        assert!(lines.len() >= 3, "want at least start/move/end events");
+        assert!(lines[0].starts_with("{\"event\":\"game_start\""));
+        assert!(lines.last().unwrap().starts_with("{\"event\":\"game_end\""));
+        // 中央のいずれかは move か pass
+        let inner = &lines[1..lines.len() - 1];
+        assert!(
+            inner
+                .iter()
+                .all(|l| l.contains("\"event\":\"move\"") || l.contains("\"event\":\"pass\""))
+        );
+        // PlayerNames が反映されている
+        assert!(lines[0].contains("\"black\":\"RandomPlayer\""));
+        let _ = std::fs::remove_file(&path);
     }
 }

@@ -6,7 +6,7 @@ use clap::Args as ClapArgs;
 use clap::ValueEnum;
 use othello_core::{BoardSize, Color};
 use othello_engine::{EngineConfig, GameEngine};
-use othello_io::{GameRecordWriter, GgfWriter, JsonWriter, PlayerInfo, PlayerPair};
+use othello_io::{GameRecordWriter, GgfWriter, JsonWriter, JsonlLogger, PlayerInfo, PlayerPair};
 use othello_player::Player;
 use std::fs::File;
 use std::io::BufWriter;
@@ -43,6 +43,10 @@ pub struct Args {
     /// 棋譜のフォーマット．
     #[arg(long, value_enum, default_value_t = RecordFormat::Json)]
     pub record_format: RecordFormat,
+
+    /// JSONL 進行ログの出力先 ( 未指定なら書き出さない)．
+    #[arg(long)]
+    pub jsonl_log: Option<PathBuf>,
 }
 
 /// `simulate` 実行関数．
@@ -57,11 +61,27 @@ pub fn run(args: Args) -> Result<()> {
     let mut black = build_player(&black_spec, Color::Black);
     let mut white = build_player(&white_spec, Color::White);
 
-    let cfg = EngineConfig::with_size(size);
+    let players = PlayerPair {
+        black: PlayerInfo {
+            name: spec_name(&black_spec).to_string(),
+            params: spec_params(&black_spec),
+        },
+        white: PlayerInfo {
+            name: spec_name(&white_spec).to_string(),
+            params: spec_params(&white_spec),
+        },
+    };
+
+    let mut cfg = EngineConfig::with_size(size);
+    if let Some(path) = &args.jsonl_log {
+        let logger = JsonlLogger::to_path(path)
+            .with_context(|| format!("failed to open jsonl log: {}", path.display()))?;
+        cfg.jsonl_logger = Some(logger);
+    }
     let mut engine =
         GameEngine::new(cfg).with_context(|| format!("failed to construct engine for {size:?}"))?;
 
-    let result = run_engine(&mut engine, black.as_mut(), white.as_mut())?;
+    let result = run_engine(&mut engine, black.as_mut(), white.as_mut(), players.clone())?;
 
     println!(
         "Game over: black={} white={} winner={:?} total_moves={}",
@@ -69,16 +89,6 @@ pub fn run(args: Args) -> Result<()> {
     );
 
     if let Some(path) = args.save_record {
-        let players = PlayerPair {
-            black: PlayerInfo {
-                name: spec_name(&black_spec).to_string(),
-                params: spec_params(&black_spec),
-            },
-            white: PlayerInfo {
-                name: spec_name(&white_spec).to_string(),
-                params: spec_params(&white_spec),
-            },
-        };
         let record = engine.into_record(players);
         let file = File::create(&path)
             .with_context(|| format!("failed to create record file: {}", path.display()))?;
@@ -94,18 +104,20 @@ pub fn run(args: Args) -> Result<()> {
         println!("Record saved to: {}", path.display());
     }
 
+    if let Some(path) = &args.jsonl_log {
+        println!("JSONL log saved to: {}", path.display());
+    }
+
     Ok(())
 }
 
-/// `Box<dyn Player>` を 2 つ受け取って `GameEngine::run` を呼ぶ薄いラッパ．
-///
-/// `run` のジェネリック型を満たすため，動的ディスパッチを `&mut dyn` のローカル newtype で吸収する．
+/// `Box<dyn Player>` を 2 つ受け取って `GameEngine::run_with_meta` を呼ぶ薄いラッパ．
 fn run_engine(
     engine: &mut GameEngine,
     black: &mut dyn Player,
     white: &mut dyn Player,
+    players: PlayerPair,
 ) -> Result<othello_core::GameResult> {
-    // dyn 経由でも Player を実装している型を要求するため，アダプタ struct で包む
     struct Adapter<'a>(&'a mut dyn Player);
     impl Player for Adapter<'_> {
         fn name(&self) -> &str {
@@ -133,5 +145,7 @@ fn run_engine(
     }
     let mut b = Adapter(black);
     let mut w = Adapter(white);
-    engine.run(&mut b, &mut w).map_err(|e| anyhow::anyhow!(e))
+    engine
+        .run_with_meta(&mut b, &mut w, players)
+        .map_err(|e| anyhow::anyhow!(e))
 }
