@@ -1,0 +1,28 @@
+[package]
+name = "othello-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Othello (Reversi) のコア型・ルール・盤面表現 (Bitboard8 + GenericBoard ハイブリッド)"
+
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+criterion = { workspace = true }
+serde_json = "1"
+
+[[bench]]
+name = "legal_moves"
+harness = false
+
+[[bench]]
+name = "self_play"
+harness = false

@@ -1,0 +1,41 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/othello-core",
+    # 以下は将来の Phase で追加予定 ( Phase 1 では未実装)
+    # "crates/othello-io",
+    # "crates/othello-player",
+    # "crates/othello-engine",
+    # "crates/othello-rl",
+    # "crates/othello-tui",
+    # "crates/othello-cli",
+    # "crates/othello-py",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+authors = ["akitenkrad <yaflam07@gmail.com>"]
+repository = "https://github.com/akitenkrad/rs-othello-sim"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+thiserror = "1"
+rand = "0.8"
+rand_chacha = "0.3"
+
+# dev-dependencies (テスト・ベンチ共通)
+proptest = "1"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[profile.bench]
+opt-level = 3
+lto = true
+codegen-units = 1
