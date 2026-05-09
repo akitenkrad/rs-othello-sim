@@ -1,7 +1,6 @@
 //! `othello-cli` バイナリエントリポイント．
 
 mod commands;
-mod player_spec;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -45,6 +44,12 @@ enum Command {
     Convert(commands::convert::Args),
     /// 棋譜の統計情報を表示．
     Inspect(commands::inspect::Args),
+    /// バッチ self-play ( BatchRunner)．
+    Selfplay(commands::selfplay::Args),
+    /// 簡易ベンチマーク ( legal-moves / self-play)．
+    Benchmark(commands::benchmark::Args),
+    /// AI 対戦の TUI 観戦．
+    Observe(commands::observe::Args),
 }
 
 fn init_tracing(level: &str, format: LogFormat) {
@@ -71,5 +76,8 @@ fn main() -> Result<()> {
         Command::Replay(args) => commands::replay::run(args),
         Command::Convert(args) => commands::convert::run(args),
         Command::Inspect(args) => commands::inspect::run(args),
+        Command::Selfplay(args) => commands::selfplay::run(args),
+        Command::Benchmark(args) => commands::benchmark::run(args),
+        Command::Observe(args) => commands::observe::run(args),
     }
 }

@@ -43,3 +43,14 @@ fn snapshot_replay_after_one_move() {
     let s = render_to_string(&app, 80, 24);
     insta::assert_snapshot!("replay_after_d3", s);
 }
+
+#[test]
+fn observe_initial_8x8() {
+    // Observe モードの初期画面．プレイヤー名はダミー．
+    let app = AppState::new_observe(
+        GameState::standard_8x8(),
+        ("MctsPlayer".into(), "RandomPlayer".into()),
+    );
+    let s = render_to_string(&app, 80, 24);
+    insta::assert_snapshot!("observe_initial_8x8", s);
+}

@@ -13,12 +13,13 @@ othello-core = { workspace = true }
 othello-player = { workspace = true }
 othello-io = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 tracing = { workspace = true }
+rayon = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
-serde_json = { workspace = true }
 tracing-subscriber = { workspace = true }

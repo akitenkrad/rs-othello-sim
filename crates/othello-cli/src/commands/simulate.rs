@@ -1,6 +1,5 @@
 //! `simulate` サブコマンド: 1 局のシミュレーション ( random / greedy)．
 
-use crate::player_spec::{build_player, parse_player_spec, spec_name, spec_params};
 use anyhow::{Context, Result};
 use clap::Args as ClapArgs;
 use clap::ValueEnum;
@@ -8,6 +7,7 @@ use othello_core::{BoardSize, Color};
 use othello_engine::{EngineConfig, GameEngine};
 use othello_io::{GameRecordWriter, GgfWriter, JsonWriter, JsonlLogger, PlayerInfo, PlayerPair};
 use othello_player::Player;
+use othello_player::player_spec::{build_player, parse_player_spec, spec_name, spec_params};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::PathBuf;

@@ -7,9 +7,8 @@ members = [
     "crates/othello-engine",
     "crates/othello-cli",
     "crates/othello-tui",
-    # 以下は将来の Phase で追加予定
-    # "crates/othello-rl",
-    # "crates/othello-py",
+    "crates/othello-rl",
+    "crates/othello-py",
 ]
 
 [workspace.package]
@@ -26,6 +25,7 @@ othello-player = { path = "crates/othello-player" }
 othello-io = { path = "crates/othello-io" }
 othello-engine = { path = "crates/othello-engine" }
 othello-tui = { path = "crates/othello-tui" }
+othello-rl = { path = "crates/othello-rl" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -40,6 +40,11 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"] }
 ratatui = "0.28"
 crossterm = "0.28"
+ndarray = { version = "0.16", features = ["serde"] }
+rayon = "1"
+pyo3 = { version = "0.22", default-features = false, features = ["macros"] }
+numpy = "0.22"
+indicatif = "0.17"
 
 # dev-dependencies (テスト・ベンチ共通)
 proptest = "1"

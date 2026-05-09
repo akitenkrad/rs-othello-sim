@@ -1,19 +1,22 @@
 [package]
-name = "othello-player"
+name = "othello-rl"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Othello プレイヤー戦略の trait と標準実装 ( Random, Greedy, Human)"
+description = "Othello reinforcement-learning environment ( Gymnasium / PettingZoo compatible)"
 
 [dependencies]
 othello-core = { workspace = true }
+othello-player = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
 rand = { workspace = true }
 rand_chacha = { workspace = true }
-thiserror = { workspace = true }
-serde_json = { workspace = true }
+ndarray = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }

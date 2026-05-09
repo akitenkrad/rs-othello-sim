@@ -16,8 +16,8 @@ The implementation is staged across five phases (see design document §10).
 |---|---|---|
 | Phase 1 | Core game (`othello-core`) | Done |
 | Phase 2 | Game loop layer (`othello-player`, `othello-engine`, `othello-io`, `othello-cli`) | Done |
-| Phase 3 | TUI, JSONL logger, WTHOR reader, `convert` / `inspect` subcommands | Pending |
-| Phase 4 | RL environments (`othello-rl`), Python bindings (`othello-py`), `selfplay` batch runner, MCTS player | Pending |
+| Phase 3 | TUI, JSONL logger, WTHOR reader, `convert` / `inspect` subcommands | Done |
+| Phase 4 | RL environments (`othello-rl`), Python bindings (`othello-py`), `selfplay` batch runner, `BatchRunner`, MCTS player, TUI Observe mode | Done |
 | Phase 5 | External engine integration (Edax / Egaroucid), visualization tools | Pending |
 
 ## Crates
@@ -25,10 +25,13 @@ The implementation is staged across five phases (see design document §10).
 ```
 crates/
 ├── othello-core/        # Board, rules, game state (Bitboard8 + GenericBoard hybrid)
-├── othello-player/      # Player trait + Random / Greedy / Human implementations
+├── othello-player/      # Player trait + Random / Greedy / Human / MCTS + PlayerSpec parser
 ├── othello-io/          # GameRecord neutral representation + JSON / GGF readers and writers
-├── othello-engine/      # GameEngine, full-snapshot GameHistory, Replayer
-└── othello-cli/         # `othello-cli` binary with `play` / `simulate` subcommands
+├── othello-engine/      # GameEngine, full-snapshot GameHistory, Replayer, BatchRunner (rayon)
+├── othello-rl/          # Gymnasium / PettingZoo compatible environments (Phase 4)
+├── othello-tui/         # ratatui frontend (Play / Replay / Observe modes)
+├── othello-cli/         # `othello-cli` binary (play / simulate / replay / convert / inspect / selfplay / benchmark / observe)
+└── othello-py/          # PyO3 bindings (`maturin develop` to install)
 ```
 
 ### `othello-core` — main types
@@ -83,14 +86,62 @@ cargo run -p othello-cli -- simulate \
   --record-format json
 ```
 
-Player specification grammar (Phase 2 subset of design §5.3):
+Player specification grammar (design §5.3):
 
 ```
 random[:seed=N]
 greedy
+mcts:N[,c=F][,seed=M][,depth=D]
 ```
 
-`mcts:N` and `external:PATH` will be added in Phases 4 and 5 respectively.
+`external:PATH` will be added in Phase 5.
+
+### Self-play batch runner
+
+```bash
+cargo run --release -p othello-cli -- selfplay \
+  --board-size 8 \
+  --num-games 1000 \
+  --threads 8 \
+  --black mcts:200 \
+  --white random:seed=1 \
+  --seed 42 \
+  --log-dir auto \
+  --swap-colors
+```
+
+`--log-dir auto` writes per-game JSON records to `runs/selfplay_YYYYMMDD_HHMMSS/`.
+
+### Benchmark
+
+```bash
+cargo run --release -p othello-cli -- benchmark --target legal-moves --duration 5
+cargo run --release -p othello-cli -- benchmark --target self-play --board-size 8 --duration 5
+```
+
+### Observe (TUI for AI vs AI)
+
+```bash
+cargo run -p othello-cli -- observe --board-size 8 --black mcts:500 --white greedy --auto-delay 500
+```
+
+### Python bindings
+
+See [`crates/othello-py/README.md`](crates/othello-py/README.md). Build with:
+
+```bash
+cd crates/othello-py
+PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop --release
+```
+
+Then in Python:
+
+```python
+import othello_sim
+env = othello_sim.OthelloEnv(board_size=8, opponent="mcts:200", reward_mode="sparse", seed=42)
+obs, info = env.reset()
+obs, reward, terminated, truncated, info = env.step(int(info["action_mask"].nonzero()[0][0]))
+```
 
 ## Design Highlights
 
@@ -119,7 +170,7 @@ Bench measurements have not yet been recorded in CI; only `cargo bench --no-run`
 | Integration | End-to-end game runs, record round-trips, replayer consistency |
 | Property (`proptest`) | Termination of random play, `Bitboard8` ⇔ `GenericBoard` equivalence, JSON round-trip idempotence |
 
-The current test suite passes 110 cases across all crates.
+The current test suite passes 225 cases across all crates.
 
 ## Repository Layout
 
@@ -129,15 +180,19 @@ rs-othello-sim/
 ├── Cargo.lock
 ├── CLAUDE.md          # Internal Claude Code guidance (Japanese)
 ├── README.md          # This file
+├── .cargo/config.toml # PYO3_USE_ABI3_FORWARD_COMPATIBILITY for Python 3.14+ environments
 └── crates/
     ├── othello-core/
     ├── othello-player/
     ├── othello-io/
     ├── othello-engine/
-    └── othello-cli/
+    ├── othello-rl/
+    ├── othello-tui/
+    ├── othello-cli/
+    └── othello-py/
 ```
 
-Future phases will add `othello-tui/`, `othello-rl/`, and `othello-py/`.
+Phase 5 will add `tools/` (Python visualization / analysis) and external-engine integration.
 
 ## Toolchain
 

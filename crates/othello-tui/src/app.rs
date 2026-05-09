@@ -9,6 +9,8 @@ pub enum AppMode {
     Play,
     /// Replay ( 棋譜再生)．
     Replay,
+    /// Observe ( AI 対戦観戦)．
+    Observe,
 }
 
 /// 盤面上のカーソル位置．
@@ -84,6 +86,24 @@ impl AppState {
             cursor,
             message,
             players: ("Human".into(), "Human".into()),
+            move_history: String::new(),
+            move_cursor: 0,
+            total_moves: 0,
+            auto_play: false,
+            finished: false,
+        }
+    }
+
+    /// Observe モード用の初期スナップショットを作る．
+    #[must_use]
+    pub fn new_observe(state: GameState, players: (String, String)) -> Self {
+        let cursor = Cursor::center(&state);
+        Self {
+            mode: AppMode::Observe,
+            state,
+            cursor,
+            message: String::from("Observe ( Space=step, a=auto, +/-=delay, q=quit)"),
+            players,
             move_history: String::new(),
             move_cursor: 0,
             total_moves: 0,

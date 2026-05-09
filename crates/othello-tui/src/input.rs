@@ -27,6 +27,10 @@ pub enum Action {
     JumpEnd,
     /// 自動再生を切替 ( Replay モード)．
     ToggleAutoPlay,
+    /// 自動再生間隔を増やす ( Observe モード)．
+    IncreaseDelay,
+    /// 自動再生間隔を減らす ( Observe モード)．
+    DecreaseDelay,
     /// 終了．
     Quit,
 }
@@ -56,6 +60,19 @@ pub fn map_replay_key(code: KeyCode) -> Option<Action> {
         KeyCode::Char('0') => Some(Action::JumpStart),
         KeyCode::Char('$') => Some(Action::JumpEnd),
         KeyCode::Char(' ') => Some(Action::ToggleAutoPlay),
+        _ => None,
+    }
+}
+
+/// Observe モード用のキー → Action 変換．
+#[must_use]
+pub fn map_observe_key(code: KeyCode) -> Option<Action> {
+    match code {
+        KeyCode::Char('q') | KeyCode::Esc => Some(Action::Quit),
+        KeyCode::Char(' ') => Some(Action::StepForward),
+        KeyCode::Char('a') => Some(Action::ToggleAutoPlay),
+        KeyCode::Char('+') | KeyCode::Char('=') => Some(Action::IncreaseDelay),
+        KeyCode::Char('-') | KeyCode::Char('_') => Some(Action::DecreaseDelay),
         _ => None,
     }
 }

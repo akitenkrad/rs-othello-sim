@@ -1,26 +1,28 @@
 [package]
-name = "othello-cli"
+name = "othello-py"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "rs-othello-sim の CLI フロントエンド ( play, simulate サブコマンド)"
+description = "Python bindings for rs-othello-sim ( PyO3 / maturin)"
 
-[[bin]]
-name = "othello-cli"
-path = "src/main.rs"
+[lib]
+name = "othello_sim"
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 othello-core = { workspace = true }
 othello-player = { workspace = true }
 othello-engine = { workspace = true }
+othello-rl = { workspace = true }
 othello-io = { workspace = true }
-othello-tui = { workspace = true }
-clap = { workspace = true }
-anyhow = { workspace = true }
+pyo3 = { workspace = true }
+numpy = { workspace = true }
+ndarray = { workspace = true }
 serde_json = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
-chrono = { workspace = true }
+
+[features]
+default = []
+extension-module = ["pyo3/extension-module"]

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "othello-sim"
+version = "0.1.0"
+description = "Python bindings for rs-othello-sim"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+]
+
+[tool.maturin]
+features = ["extension-module"]
+module-name = "othello_sim"
+manifest-path = "Cargo.toml"

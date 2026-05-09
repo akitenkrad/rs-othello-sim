@@ -33,6 +33,7 @@ fn render_header(frame: &mut Frame, area: Rect, app: &AppState) {
     let mode = match app.mode {
         AppMode::Play => "Play",
         AppMode::Replay => "Replay",
+        AppMode::Observe => "Observe",
     };
     let title = format!(
         "rs-othello-sim v{}    [Mode: {}]    [Move {}/{}]",
@@ -162,6 +163,7 @@ fn render_footer(frame: &mut Frame, area: Rect, app: &AppState) {
     let hint = match app.mode {
         AppMode::Play => "Keys: [hjkl/arrows] move  [Enter/Space] place  [p] pass  [q] quit",
         AppMode::Replay => "Keys: [<-/->] step  [0/$] start/end  [Space] auto-play  [q] quit",
+        AppMode::Observe => "Keys: [Space] step  [a] auto-play  [+/-] delay  [q] quit",
     };
     let block = Block::default().borders(Borders::ALL);
     let p = Paragraph::new(hint).block(block);
