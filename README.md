@@ -1,73 +1,150 @@
 # rs-othello-sim
 
-Othello (Reversi) のシミュレーション研究および強化学習実験のための Rust ベース統合フレームワーク．
+A Rust-based integrated framework for Othello (Reversi) simulation research and reinforcement-learning experiments.
 
-## 概要
+## Overview
 
-`rs-othello-sim` は，可変サイズ Othello のゲームコア，プラガブルなプレイヤー戦略，棋譜入出力，TUI/CLI，強化学習環境，Python バインディングを段階的に提供するフレームワークである．Othello は完全情報・確定的・2 人ゼロサムという制御可能な性質を持つため，RL アルゴリズム検証や Theory of Mind 研究の testbed として機能する．
+`rs-othello-sim` is a workspace that incrementally provides a variable-size Othello game core, pluggable player strategies, game-record I/O, a TUI/CLI, RL environments, and Python bindings. Othello — being a fully observable, deterministic, two-player zero-sum game — serves as a controllable testbed for RL algorithm validation and Theory-of-Mind research.
 
-設計書全体は親リポジトリ ( Obsidian vault) の `設計書/Othello_シミュレータ設計書.md` を参照．
+The full design document lives in the parent Obsidian vault at `設計書/Othello_シミュレータ設計書.md`.
 
-## Phase 1 の範囲 ( 本リリース)
+## Implementation Status
 
-本リリース ( v0.1.0) は **Phase 1: コアゲーム** の成果物である．以下のクレートのみを含む．
+The implementation is staged across five phases (see design document §10).
 
-- `crates/othello-core/` — 盤面・ルール・ゲーム状態の中核実装
-  - `Bitboard8` — 8×8 専用 bitboard ( $u64 \times 2$)
-  - `GenericBoard` — $4 \times 4$ から $26 \times 26$ までの任意サイズ
-  - `Board` — 上記 2 つを切り替えるハイブリッド型
-  - `GameState`，`GameResult`，合法手生成，石返し，終局判定
+| Phase | Scope | Status |
+|---|---|---|
+| Phase 1 | Core game (`othello-core`) | Done |
+| Phase 2 | Game loop layer (`othello-player`, `othello-engine`, `othello-io`, `othello-cli`) | Done |
+| Phase 3 | TUI, JSONL logger, WTHOR reader, `convert` / `inspect` subcommands | Pending |
+| Phase 4 | RL environments (`othello-rl`), Python bindings (`othello-py`), `selfplay` batch runner, MCTS player | Pending |
+| Phase 5 | External engine integration (Edax / Egaroucid), visualization tools | Pending |
 
-将来の Phase で追加予定のクレート ( `othello-io`, `othello-player`, `othello-engine`, `othello-rl`, `othello-tui`, `othello-cli`, `othello-py`) はワークスペースマニフェストにコメントで列挙してある．
+## Crates
 
-## ビルド・テスト
+```
+crates/
+├── othello-core/        # Board, rules, game state (Bitboard8 + GenericBoard hybrid)
+├── othello-player/      # Player trait + Random / Greedy / Human implementations
+├── othello-io/          # GameRecord neutral representation + JSON / GGF readers and writers
+├── othello-engine/      # GameEngine, full-snapshot GameHistory, Replayer
+└── othello-cli/         # `othello-cli` binary with `play` / `simulate` subcommands
+```
+
+### `othello-core` — main types
+
+| Type | Role |
+|---|---|
+| `Color` | Black / White enum with `opponent()` |
+| `Coord` | `(row: u8, col: u8)` board coordinate |
+| `Move` | `Place(Coord)` or `Pass` |
+| `BoardSize` | Board dimensions (`rows`, `cols`) |
+| `Bitboard8` | 8×8 dedicated bitboard (`u64 × 2`) |
+| `GenericBoard` | Variable size from 4×4 up to 26×26 |
+| `Board` | Hybrid enum dispatching to `Bitboard8` or `Generic` |
+| `GameState` | Board + side-to-move + move number + consecutive-pass counter |
+| `GameResult` | Winner and final stone counts |
+| `OthelloError` | Library error type (`thiserror`-derived) |
+
+## Build & Test
 
 ```bash
-# 全クレートビルド
+# Build all crates
 cargo build --workspace
 
-# テスト ( ユニット + 統合 + プロパティ)
+# Run all tests (unit + integration + property-based)
 cargo test --workspace
 
-# Lint
+# Lint (CI-strict, no warnings)
 cargo clippy --all-targets -- -D warnings
 
-# フォーマット確認
+# Format check
 cargo fmt --check
 
-# ベンチマーク ( criterion)
+# Run criterion benchmarks
 cargo bench
 
-# ベンチコンパイル確認のみ
+# Compile-only check for benchmarks
 cargo bench --no-run
 ```
 
-## 主要型 ( othello-core)
+## CLI Quick Start
 
-| 型 | 役割 |
+```bash
+# Two-player game over standard I/O (Human vs Human)
+cargo run -p othello-cli -- play --board-size 8
+
+# Single simulated game and record export (JSON or GGF)
+cargo run -p othello-cli -- simulate \
+  --board-size 8 \
+  --black random:seed=42 \
+  --white greedy \
+  --save-record game.json \
+  --record-format json
+```
+
+Player specification grammar (Phase 2 subset of design §5.3):
+
+```
+random[:seed=N]
+greedy
+```
+
+`mcts:N` and `external:PATH` will be added in Phases 4 and 5 respectively.
+
+## Design Highlights
+
+- **Hybrid board representation**: 8×8 uses `Bitboard8` (`u64 × 2`) for speed; 4×4 to 26×26 uses `GenericBoard` (`Vec<Option<Color>>`).
+- **Bitboard layout**: `bit_index = row * 8 + col` (row 0 col 0 → bit 0).
+- **8-direction shifts**: column masks (A and H files) prevent wrap-around; chained-stone masks are built with five shift–OR iterations.
+- **Equivalence guarantee**: property-based tests verify that `Bitboard8` and `GenericBoard` produce identical legal-move sets and flipped-stone sets on 8×8.
+- **Full-snapshot history**: each move pushes a complete `GameState` snapshot, making `step_forward` / `step_backward` / `jump_to(n)` $O(1)$.
+- **Pass handling**: when the side to move has no legal moves, the engine auto-passes; players returning `Pass` while legal moves exist trigger an error.
+
+## Benchmark Targets (design document §9)
+
+| Metric | Target |
 |---|---|
-| `Color` | 黒・白の二値 enum．`opponent()` を持つ |
-| `Coord` | 行・列を持つ座標 ( `u8`) |
-| `Move` | `Place(Coord)` または `Pass` |
-| `BoardSize` | 盤面サイズ ( rows / cols) |
-| `Bitboard8` | 8×8 専用 bitboard 実装 |
-| `GenericBoard` | 任意サイズの汎用実装 |
-| `Board` | `Bitboard8` / `Generic` のハイブリッド enum |
-| `GameState` | 盤面 + 手番 + 手数 + 連続パス回数 |
-| `GameResult` | 勝者と石数 |
-| `OthelloError` | エラー型 ( `thiserror` 派生) |
+| 8×8 random self-play | $\geq 10^6$ moves/sec (single thread) |
+| 8×8 legal-move generation | $\geq 10^7$ ops/sec (Bitboard) |
+| 16×16 random self-play | $\geq 10^4$ moves/sec (Generic) |
 
-## ベンチマーク目標 ( 設計書 §9 より)
+Bench measurements have not yet been recorded in CI; only `cargo bench --no-run` (compile check) is verified.
 
-| 項目 | 目標 |
+## Testing
+
+| Layer | What is checked |
 |---|---|
-| 8×8 ランダム自己対戦 | $\geq 10^6$ 手/秒 ( 単一スレッド) |
-| 8×8 合法手生成 | $\geq 10^7$ 回/秒 ( Bitboard) |
-| 16×16 ランダム自己対戦 | $\geq 10^4$ 手/秒 ( Generic) |
+| Unit | Per-module behaviour for every public type |
+| Integration | End-to-end game runs, record round-trips, replayer consistency |
+| Property (`proptest`) | Termination of random play, `Bitboard8` ⇔ `GenericBoard` equivalence, JSON round-trip idempotence |
 
-## ライセンス
+The current test suite passes 110 cases across all crates.
+
+## Repository Layout
+
+```
+rs-othello-sim/
+├── Cargo.toml         # Workspace manifest with shared dependencies
+├── Cargo.lock
+├── CLAUDE.md          # Internal Claude Code guidance (Japanese)
+├── README.md          # This file
+└── crates/
+    ├── othello-core/
+    ├── othello-player/
+    ├── othello-io/
+    ├── othello-engine/
+    └── othello-cli/
+```
+
+Future phases will add `othello-tui/`, `othello-rl/`, and `othello-py/`.
+
+## Toolchain
+
+- Rust edition `2024`, `rust-version = "1.85"`
+- `cargo fmt`, `cargo clippy --all-targets -- -D warnings` kept clean
+- `unsafe` is not used
+
+## License
 
 MIT
-
----
-*This file was generated by Claude Code.*
