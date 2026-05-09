@@ -4,19 +4,28 @@ mod commands;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::Layer;
+use tracing_subscriber::fmt;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 /// rs-othello-sim CLI フロントエンド．
 #[derive(Debug, Parser)]
 #[command(name = "othello-cli", version, about = "Othello simulator CLI")]
 struct Cli {
-    /// tracing ログレベル ( trace/debug/info/warn/error)．
+    /// tracing ログレベル ( trace/debug/info/warn/error)．stderr に適用される．
     #[arg(long, global = true, default_value = "info")]
     log_level: String,
 
-    /// tracing 出力フォーマット ( text / json)．
+    /// tracing 出力フォーマット ( text / json)．stderr 出力のみに適用．
     #[arg(long, global = true, value_enum, default_value_t = LogFormat::Text)]
     log_format: LogFormat,
+
+    /// 追加で JSON 形式のログをファイルに出力する ( stderr 出力と並行)．
+    #[arg(long, global = true)]
+    log_file: Option<PathBuf>,
 
     #[command(subcommand)]
     command: Command,
@@ -52,24 +61,52 @@ enum Command {
     Observe(commands::observe::Args),
 }
 
-fn init_tracing(level: &str, format: LogFormat) {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
-    let builder = tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_writer(std::io::stderr);
-    match format {
-        LogFormat::Text => {
-            let _ = builder.try_init();
+fn init_tracing(level: &str, format: LogFormat, log_file: Option<&PathBuf>) -> Result<()> {
+    let filter_for_stderr =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(level));
+    let filter_for_file = EnvFilter::new(level);
+
+    // stderr layer
+    let stderr_layer: Box<dyn tracing_subscriber::Layer<_> + Send + Sync> = match format {
+        LogFormat::Text => Box::new(
+            fmt::layer()
+                .with_writer(std::io::stderr)
+                .with_filter(filter_for_stderr),
+        ),
+        LogFormat::Json => Box::new(
+            fmt::layer()
+                .json()
+                .with_writer(std::io::stderr)
+                .with_filter(filter_for_stderr),
+        ),
+    };
+
+    let registry = tracing_subscriber::registry().with(stderr_layer);
+
+    if let Some(path) = log_file {
+        if let Some(parent) = path.parent()
+            && !parent.as_os_str().is_empty()
+        {
+            std::fs::create_dir_all(parent).ok();
         }
-        LogFormat::Json => {
-            let _ = builder.json().try_init();
-        }
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)?;
+        let file_layer = fmt::layer()
+            .json()
+            .with_writer(file)
+            .with_filter(filter_for_file);
+        let _ = registry.with(file_layer).try_init();
+    } else {
+        let _ = registry.try_init();
     }
+    Ok(())
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    init_tracing(&cli.log_level, cli.log_format);
+    init_tracing(&cli.log_level, cli.log_format, cli.log_file.as_ref())?;
     match cli.command {
         Command::Play(args) => commands::play::run(args),
         Command::Simulate(args) => commands::simulate::run(args),

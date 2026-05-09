@@ -4,7 +4,7 @@
 //! 8×8 標準初期配置と 1 手後の局面でカバレッジを取る．
 
 use othello_core::{Coord, GameState, Move};
-use othello_tui::{AppMode, AppState, Cursor, ui};
+use othello_tui::{AppMode, AppState, Cursor, EvaluatorEntry, EvaluatorOverlay, ui};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
@@ -51,6 +51,34 @@ fn observe_initial_8x8() {
         GameState::standard_8x8(),
         ("MctsPlayer".into(), "RandomPlayer".into()),
     );
-    let s = render_to_string(&app, 80, 24);
+    let s = render_to_string(&app, 80, 28);
     insta::assert_snapshot!("observe_initial_8x8", s);
+}
+
+#[test]
+fn observe_with_evaluator() {
+    // Observe モードで evaluator overlay が表示されている画面．
+    let mut app = AppState::new_observe(
+        GameState::standard_8x8(),
+        ("MctsPlayer".into(), "RandomPlayer".into()),
+    );
+    app.evaluator = Some(EvaluatorOverlay {
+        source: "MctsPlayer".into(),
+        entries: vec![
+            EvaluatorEntry {
+                move_label: "c5".into(),
+                score: 0.62,
+            },
+            EvaluatorEntry {
+                move_label: "d6".into(),
+                score: 0.48,
+            },
+            EvaluatorEntry {
+                move_label: "e6".into(),
+                score: 0.31,
+            },
+        ],
+    });
+    let s = render_to_string(&app, 80, 28);
+    insta::assert_snapshot!("observe_with_evaluator", s);
 }

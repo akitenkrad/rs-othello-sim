@@ -3,11 +3,14 @@
 use anyhow::{Context, Result};
 use chrono::Local;
 use clap::{Args as ClapArgs, ValueEnum};
+use indicatif::{ProgressBar, ProgressStyle};
 use othello_core::{BoardSize, Color};
-use othello_engine::{BatchConfig, BatchRunner};
+use othello_engine::{BatchConfig, BatchRunner, GameSummary, ProgressCallback};
 use othello_player::Player;
 use othello_player::player_spec::{PlayerSpec, parse_player_spec};
+use std::io::IsTerminal;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 /// 棋譜出力フォーマット ( selfplay)．現状は JSON のみサポート．
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -63,6 +66,30 @@ pub struct Args {
     /// 安全装置 ( この手数を超えたらエラー停止)．
     #[arg(long)]
     pub max_moves: Option<u32>,
+
+    /// 進捗バーを表示しない ( デフォルト: stderr が tty なら表示)．
+    #[arg(long, default_value_t = false)]
+    pub no_progress: bool,
+}
+
+/// `indicatif::ProgressBar` を [`ProgressCallback`] でラップする実装．
+struct IndicatifProgress {
+    bar: ProgressBar,
+}
+
+impl ProgressCallback for IndicatifProgress {
+    fn on_game_complete(&self, _game_index: usize, summary: &GameSummary) {
+        let winner = match summary.winner {
+            Some(Color::Black) => "B",
+            Some(Color::White) => "W",
+            None => "D",
+        };
+        self.bar.inc(1);
+        self.bar.set_message(format!(
+            "last={winner} score={}-{}",
+            summary.black_score, summary.white_score
+        ));
+    }
 }
 
 /// `selfplay` 実行関数．
@@ -84,6 +111,24 @@ pub fn run(args: Args) -> Result<()> {
         None => None,
     };
 
+    // 進捗バー: stderr が tty かつ --no-progress なしの場合のみ有効
+    let show_progress = !args.no_progress && std::io::stderr().is_terminal();
+    let (progress_cb, progress_bar): (Option<Arc<dyn ProgressCallback>>, Option<ProgressBar>) =
+        if show_progress && args.num_games > 0 {
+            let bar = ProgressBar::new(args.num_games as u64);
+            bar.set_style(
+                ProgressStyle::with_template(
+                    "[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} ({eta}) {msg}",
+                )
+                .unwrap_or_else(|_| ProgressStyle::default_bar())
+                .progress_chars("##-"),
+            );
+            let cb: Arc<dyn ProgressCallback> = Arc::new(IndicatifProgress { bar: bar.clone() });
+            (Some(cb), Some(bar))
+        } else {
+            (None, None)
+        };
+
     let cfg = BatchConfig {
         num_games: args.num_games,
         num_threads: args.threads,
@@ -93,6 +138,7 @@ pub fn run(args: Args) -> Result<()> {
         board_size,
         max_moves: args.max_moves,
         jsonl_log_path: args.jsonl_log.clone(),
+        progress: progress_cb,
     };
 
     eprintln!(
@@ -103,6 +149,11 @@ pub fn run(args: Args) -> Result<()> {
     let runner = BatchRunner::new(cfg);
     let factory = move |seed: u64| make_factory(&black_spec, &white_spec, seed);
     let result = runner.run(factory).map_err(|e| anyhow::anyhow!(e))?;
+
+    // 進捗バーを終了
+    if let Some(bar) = progress_bar {
+        bar.finish_with_message("done");
+    }
 
     let elapsed_secs = result.elapsed.as_secs_f64();
     let throughput = if elapsed_secs > 0.0 {
@@ -180,6 +231,8 @@ fn build_with_seed_override(spec: &PlayerSpec, color: Color, seed: u64) -> Box<d
             seed: Some(s.unwrap_or(0) ^ seed),
             max_rollout_depth,
         },
+        // 外部エンジンには seed の概念がないのでそのまま使う．
+        PlayerSpec::External { .. } => spec.clone(),
     };
     overridden.build_player(color)
 }
@@ -202,6 +255,7 @@ mod tests {
             swap_colors: false,
             save_records: SaveRecordsFormat::Json,
             max_moves: None,
+            no_progress: true,
         };
         run(args).unwrap();
     }

@@ -49,6 +49,26 @@ impl Cursor {
     }
 }
 
+/// Evaluator overlay 1 行: `(move 表記, 評価値, 表示順)`．
+///
+/// 大きい順にソートされた状態で `AppState` に格納される．
+#[derive(Debug, Clone, PartialEq)]
+pub struct EvaluatorEntry {
+    /// 手の文字列表現 ( 例 `"D3"`，`"pass"`)．
+    pub move_label: String,
+    /// 評価値 ( 0.0 〜 1.0)．
+    pub score: f32,
+}
+
+/// Evaluator overlay の状態．
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct EvaluatorOverlay {
+    /// プレイヤー名 ( 表示ヘッダ用)．
+    pub source: String,
+    /// 行リスト ( score 降順)．
+    pub entries: Vec<EvaluatorEntry>,
+}
+
 /// TUI アプリの可視状態スナップショット．描画関数 [`crate::ui::render`] が読む．
 #[derive(Debug, Clone)]
 pub struct AppState {
@@ -72,6 +92,8 @@ pub struct AppState {
     pub auto_play: bool,
     /// 終局かどうか．
     pub finished: bool,
+    /// Evaluator overlay ( Observe モードで MCTS 等の visit count を表示)．
+    pub evaluator: Option<EvaluatorOverlay>,
 }
 
 impl AppState {
@@ -91,6 +113,7 @@ impl AppState {
             total_moves: 0,
             auto_play: false,
             finished: false,
+            evaluator: None,
         }
     }
 
@@ -109,6 +132,7 @@ impl AppState {
             total_moves: 0,
             auto_play: false,
             finished: false,
+            evaluator: None,
         }
     }
 
@@ -127,6 +151,7 @@ impl AppState {
             total_moves: total,
             auto_play: false,
             finished: false,
+            evaluator: None,
         }
     }
 }

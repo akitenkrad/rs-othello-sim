@@ -121,6 +121,7 @@ impl PlayMode {
             total_moves: total,
             auto_play: false,
             finished: self.finished,
+            evaluator: None,
         }
     }
 

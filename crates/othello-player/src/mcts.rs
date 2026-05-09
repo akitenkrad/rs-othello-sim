@@ -21,11 +21,12 @@
 //! assert!(matches!(mv, Move::Place(_)));
 //! ```
 
-use crate::traits::{Player, PlayerError};
+use crate::traits::{Evaluator, Player, PlayerError};
 use othello_core::{Color, GameState, Move};
 use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
+use std::collections::HashMap;
 
 /// MCTS プレイヤーの設定．
 #[derive(Debug, Clone, Copy)]
@@ -92,6 +93,11 @@ pub struct MctsPlayer {
     color: Color,
     config: MctsConfig,
     rng: ChaCha8Rng,
+    /// 直近 [`select_move`] / [`Evaluator::evaluate`] で得た「ルート直下の手 → ( visit, q)」．
+    ///
+    /// `Evaluator` 実装で正規化値を返すために保持する．
+    /// `select_move` 中の中間状態は反映しない ( 完了時にのみ更新)．
+    last_root_stats: Vec<(Move, u32, f64)>,
 }
 
 impl MctsPlayer {
@@ -104,6 +110,7 @@ impl MctsPlayer {
             color,
             config,
             rng: ChaCha8Rng::seed_from_u64(seed),
+            last_root_stats: Vec::new(),
         }
     }
 
@@ -142,9 +149,11 @@ impl Player for MctsPlayer {
     fn select_move(&mut self, state: &GameState) -> Result<Move, PlayerError> {
         let legal = state.legal_moves();
         if legal.is_empty() {
+            self.last_root_stats.clear();
             return Ok(Move::Pass);
         }
         if legal.len() == 1 {
+            self.last_root_stats = vec![(legal[0], 1, 0.0)];
             return Ok(legal[0]);
         }
 
@@ -153,6 +162,8 @@ impl Player for MctsPlayer {
         for _ in 0..self.config.simulations {
             tree.run_one(&mut self.rng, self.config.max_rollout_depth);
         }
+        // `select_move` 完了時にルート統計を更新する ( 中間状態は反映しない)．
+        self.last_root_stats = tree.root_stats();
         let best = tree.best_move().ok_or_else(|| {
             PlayerError::Other("MctsPlayer: tree returned no move ( unexpected)".into())
         })?;
@@ -163,6 +174,33 @@ impl Player for MctsPlayer {
         if let Some(seed) = self.config.seed {
             self.rng = ChaCha8Rng::seed_from_u64(seed);
         }
+        self.last_root_stats.clear();
+    }
+
+    fn evaluator(&mut self) -> Option<&mut dyn Evaluator> {
+        Some(self)
+    }
+}
+
+impl Evaluator for MctsPlayer {
+    /// 直近の `select_move` 呼び出しで得たルート直下の visit 数を正規化して返す．
+    ///
+    /// 引数 `state` が直近の root と異なる場合 ( 履歴が古い)，現状の cache をそのまま返す
+    /// 実装としている ( 必要なら呼び出し側で `select_move` を先に呼ぶこと)．
+    /// visit 0 の場合や cache 未生成の場合は `None` を返す．
+    fn evaluate(&mut self, _state: &GameState) -> Option<HashMap<Move, f32>> {
+        if self.last_root_stats.is_empty() {
+            return None;
+        }
+        let total: u32 = self.last_root_stats.iter().map(|(_, v, _)| *v).sum();
+        if total == 0 {
+            return None;
+        }
+        let mut out = HashMap::new();
+        for &(mv, visits, _q) in &self.last_root_stats {
+            out.insert(mv, visits as f32 / total as f32);
+        }
+        Some(out)
     }
 }
 
@@ -353,6 +391,22 @@ impl MctsTree {
         }
     }
 
+    /// ルート直下の各子の `( move, visits, q)` を返す．`q` は `score_sum / visits`．
+    fn root_stats(&self) -> Vec<(Move, u32, f64)> {
+        let root = &self.nodes[0];
+        let mut out = Vec::with_capacity(root.children.len());
+        for &(mv, child_id) in &root.children {
+            let c = &self.nodes[child_id];
+            let q = if c.visits == 0 {
+                0.0
+            } else {
+                c.score_sum / c.visits as f64
+            };
+            out.push((mv, c.visits, q));
+        }
+        out
+    }
+
     /// ルート直下の子から訪問数最大の手を選ぶ．
     fn best_move(&self) -> Option<Move> {
         let root = &self.nodes[0];
@@ -440,6 +494,25 @@ mod tests {
         let mut p = MctsPlayer::new(s.side_to_move, MctsConfig::new(20)).with_seed(42);
         let mv = p.select_move(&s).unwrap();
         assert!(s.legal_moves().contains(&mv));
+    }
+
+    #[test]
+    fn evaluator_returns_normalized_visits_after_select_move() {
+        use crate::Evaluator;
+        let mut p = MctsPlayer::new(Color::Black, MctsConfig::new(50)).with_seed(7);
+        let s = GameState::standard_8x8();
+        // select_move 前は None
+        assert!(p.evaluate(&s).is_none());
+        let _mv = p.select_move(&s).unwrap();
+        let scores = p.evaluate(&s).expect("scores after select_move");
+        assert!(!scores.is_empty());
+        let total: f32 = scores.values().sum();
+        // 正規化されているので合計 ≈ 1.0
+        assert!((total - 1.0).abs() < 1e-3, "total = {total}");
+        // 全ての値が `0.0..=1.0`
+        for &v in scores.values() {
+            assert!((0.0..=1.0).contains(&v));
+        }
     }
 
     /// MCTS は Random に対して大幅優位が期待できる ( seed 固定 10 局で勝率 60% 以上)．

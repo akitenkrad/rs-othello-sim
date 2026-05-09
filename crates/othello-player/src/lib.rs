@@ -33,12 +33,15 @@ pub use human::HumanPlayer;
 pub use mcts::{MctsConfig, MctsPlayer};
 pub use player_spec::{PlayerSpec, parse_player_spec, spec_name, spec_params};
 pub use random::RandomPlayer;
-pub use traits::{Player, PlayerError};
+pub use traits::{Evaluator, Player, PlayerError};
+
+pub mod external;
+pub use external::{ExternalEngineConfig, ExternalEnginePlayer, Protocol};
 
 /// よく使う型を一括で導入するための prelude．
 pub mod prelude {
     pub use crate::{
-        GreedyPlayer, HumanPlayer, MctsConfig, MctsPlayer, Player, PlayerError, PlayerSpec,
-        RandomPlayer,
+        Evaluator, GreedyPlayer, HumanPlayer, MctsConfig, MctsPlayer, Player, PlayerError,
+        PlayerSpec, RandomPlayer,
     };
 }

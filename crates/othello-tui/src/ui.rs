@@ -105,17 +105,61 @@ pub fn build_board_lines(app: &AppState) -> Vec<Line<'static>> {
 }
 
 fn render_info(frame: &mut Frame, area: Rect, app: &AppState) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(6), // game info
-            Constraint::Min(3),    // move history
-            Constraint::Length(4), // players
-        ])
-        .split(area);
-    render_game_info(frame, chunks[0], app);
-    render_history(frame, chunks[1], app);
-    render_players(frame, chunks[2], app);
+    if app.mode == AppMode::Observe {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(6), // game info
+                Constraint::Min(3),    // move history
+                Constraint::Length(4), // players
+                Constraint::Length(8), // evaluator overlay
+            ])
+            .split(area);
+        render_game_info(frame, chunks[0], app);
+        render_history(frame, chunks[1], app);
+        render_players(frame, chunks[2], app);
+        render_evaluator(frame, chunks[3], app);
+    } else {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(6), // game info
+                Constraint::Min(3),    // move history
+                Constraint::Length(4), // players
+            ])
+            .split(area);
+        render_game_info(frame, chunks[0], app);
+        render_history(frame, chunks[1], app);
+        render_players(frame, chunks[2], app);
+    }
+}
+
+fn render_evaluator(frame: &mut Frame, area: Rect, app: &AppState) {
+    let block = Block::default().borders(Borders::ALL).title(" Evaluator ");
+    let lines: Vec<Line<'static>> = match &app.evaluator {
+        Some(overlay) => {
+            let mut out: Vec<Line<'static>> = Vec::with_capacity(overlay.entries.len() + 1);
+            out.push(Line::from(format!("Source: {}", overlay.source)));
+            // 上位最大 5 行を表示
+            let top = overlay.entries.iter().take(5);
+            for entry in top {
+                let bar_w = (entry.score.clamp(0.0, 1.0) * 8.0).round() as usize;
+                let bar: String = std::iter::repeat_n('#', bar_w)
+                    .chain(std::iter::repeat_n(' ', 8 - bar_w))
+                    .collect();
+                out.push(Line::from(format!(
+                    "{:<4} [{}] {:.3}",
+                    entry.move_label, bar, entry.score
+                )));
+            }
+            out
+        }
+        None => vec![Line::from("Evaluator: N/A")],
+    };
+    let p = Paragraph::new(lines)
+        .block(block)
+        .wrap(Wrap { trim: false });
+    frame.render_widget(p, area);
 }
 
 fn render_game_info(frame: &mut Frame, area: Rect, app: &AppState) {

@@ -29,7 +29,7 @@ use ratatui::{Terminal, backend::CrosstermBackend};
 use std::io::{Stdout, stdout};
 use std::time::{Duration, Instant};
 
-pub use app::{AppMode, AppState, Cursor};
+pub use app::{AppMode, AppState, Cursor, EvaluatorEntry, EvaluatorOverlay};
 pub use input::Action;
 pub use modes::observe::{ObserveBackend, ObserveMode};
 pub use modes::play::PlayMode;
@@ -181,6 +181,7 @@ pub fn run_observe(config: ObserveConfig) -> Result<()> {
                 seed: Some(s.unwrap_or(0) ^ seed),
                 max_rollout_depth,
             },
+            external @ PlayerSpec::External { .. } => external,
         };
         overridden.build_player(color)
     }

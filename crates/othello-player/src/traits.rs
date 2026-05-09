@@ -1,6 +1,7 @@
 //! [`Player`] trait と関連エラー型．
 
 use othello_core::{Color, GameResult, GameState, Move};
+use std::collections::HashMap;
 use thiserror::Error;
 
 /// プレイヤーが手の選択中に発生し得るエラー．
@@ -53,4 +54,40 @@ pub trait Player: Send {
 
     /// ゲーム開始時に呼ばれる ( 状態のリセット用)．
     fn reset(&mut self) {}
+
+    /// プレイヤーが [`Evaluator`] を実装している場合，その可変参照を返す．
+    ///
+    /// デフォルト実装は `None`．`MctsPlayer` 等は override してこのメソッドから自身を返す．
+    /// TUI Observe モードの evaluator overlay 表示など，外部から評価値を覗く用途に使う．
+    fn evaluator(&mut self) -> Option<&mut dyn Evaluator> {
+        None
+    }
+}
+
+/// 各合法手に対する評価値 ( 勝率・visit 数を正規化した値など) を返す trait．
+///
+/// MCTS の visit count や NN の policy 値を TUI Observe モードや CLI から覗くために用意した
+/// 補助 trait．対応していないプレイヤーは何も実装しないか，[`Evaluator::evaluate`] が
+/// `None` を返せばよい．
+///
+/// 値は `0.0..=1.0` の勝率推定など，**大きいほど良い** 値とする．呼び出し側は表示時に
+/// 最大値を強調するなどの用途に使う．
+///
+/// ## 例
+///
+/// ```ignore
+/// use othello_core::{Move, GameState};
+/// use othello_player::{Evaluator, MctsConfig, MctsPlayer, Player, traits::Evaluator as _};
+/// use std::collections::HashMap;
+///
+/// let mut p = MctsPlayer::new(othello_core::Color::Black, MctsConfig::new(100));
+/// let s = GameState::standard_8x8();
+/// let scores: Option<HashMap<Move, f32>> = p.evaluate(&s);
+/// ```
+pub trait Evaluator: Send {
+    /// 各合法手の評価値を返す ( キーは合法手の `Move`)．
+    ///
+    /// 呼び出しによって内部状態を更新してよい ( 例: MCTS の木を 1 手分だけ走らせる)．
+    /// 評価未対応のプレイヤーは `None` を返す．
+    fn evaluate(&mut self, state: &GameState) -> Option<HashMap<Move, f32>>;
 }

@@ -11,7 +11,7 @@ pub mod engine;
 pub mod history;
 pub mod replayer;
 
-pub use batch::{BatchConfig, BatchError, BatchResult, BatchRunner, GameSummary};
+pub use batch::{BatchConfig, BatchError, BatchResult, BatchRunner, GameSummary, ProgressCallback};
 pub use engine::{EngineConfig, EngineError, GameEngine};
 pub use history::GameHistory;
 pub use replayer::Replayer;

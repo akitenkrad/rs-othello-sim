@@ -95,6 +95,7 @@ impl ReplayMode {
             total_moves: total,
             auto_play: self.auto_play,
             finished: self.cursor == total,
+            evaluator: None,
         }
     }
 

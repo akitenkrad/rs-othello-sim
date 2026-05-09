@@ -1,8 +1,10 @@
 //! Observe モード ( AI 対戦観戦) のロジック．
 
-use crate::app::{AppMode, AppState, Cursor, format_move_history};
+use crate::app::{
+    AppMode, AppState, Cursor, EvaluatorEntry, EvaluatorOverlay, format_move_history,
+};
 use crate::input::Action;
-use othello_core::{BoardSize, Color, GameState, Move, OthelloError};
+use othello_core::{BoardSize, Color, Coord, GameState, Move, OthelloError};
 use othello_player::Player;
 
 /// Observe モードのバックエンド設定．
@@ -26,6 +28,9 @@ pub struct ObserveMode {
     pub auto_play: bool,
     finished: bool,
     message: String,
+    /// 直近 `select_move` 後に取得した evaluator overlay．
+    /// `select_move` 中の中間状態は反映しない ( 完了時にのみ更新)．
+    last_overlay: Option<EvaluatorOverlay>,
 }
 
 impl ObserveMode {
@@ -50,6 +55,7 @@ impl ObserveMode {
             auto_play,
             finished: false,
             message,
+            last_overlay: None,
         })
     }
 
@@ -105,6 +111,9 @@ impl ObserveMode {
                 }
             }
         };
+
+        // select_move 後の evaluator overlay 取得 ( 中間状態は反映しない)
+        self.last_overlay = collect_overlay(side, &mut self.backend);
         match self.state.apply_move(mv) {
             Ok(_) => {
                 self.moves.push((side, mv));
@@ -153,7 +162,49 @@ impl ObserveMode {
             total_moves: self.moves.len(),
             auto_play: self.auto_play,
             finished: self.finished,
+            evaluator: self.last_overlay.clone(),
         }
+    }
+}
+
+/// `side` のプレイヤーから evaluator overlay を取得する．
+///
+/// プレイヤーが [`Evaluator`] 未対応の場合や，評価が空の場合は `None`．
+fn collect_overlay(side: Color, backend: &mut ObserveBackend) -> Option<EvaluatorOverlay> {
+    let player: &mut Box<dyn Player> = match side {
+        Color::Black => &mut backend.black,
+        Color::White => &mut backend.white,
+    };
+    let source = player.name().to_string();
+    // dummy state は不要．evaluate の引数 state は MctsPlayer の現実装では使わない ( cache 返すだけ)．
+    // しかし設計上は受け取るので，呼び出し側で適当な state ( 必要なら標準) を渡す必要あり．
+    // 実用上は直前の select_move で root cache が更新されたので，state を渡しても問題ない．
+    let evaluator = player.evaluator()?;
+    let scores = evaluator.evaluate(&GameState::standard_8x8())?;
+    if scores.is_empty() {
+        return None;
+    }
+    let mut entries: Vec<EvaluatorEntry> = scores
+        .into_iter()
+        .map(|(mv, score)| EvaluatorEntry {
+            move_label: format_move(mv),
+            score,
+        })
+        .collect();
+    entries.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    Some(EvaluatorOverlay { source, entries })
+}
+
+fn format_move(mv: Move) -> String {
+    match mv {
+        Move::Place(Coord { row, col }) => {
+            format!("{}{}", (b'a' + col) as char, row + 1)
+        }
+        Move::Pass => "pass".to_string(),
     }
 }
 

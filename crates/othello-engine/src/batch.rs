@@ -25,9 +25,18 @@ use rayon::prelude::*;
 use std::fs::{File, OpenOptions, create_dir_all};
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
+
+/// バッチ実行の進捗コールバック．各ゲーム完了時に 1 回呼ばれる．
+///
+/// `BatchRunner.run` の中で `rayon` の並列スレッドから呼ばれるため，実装は
+/// 内部で同期化されている必要がある ( `Mutex` 等で囲む)．
+pub trait ProgressCallback: Send + Sync {
+    /// `index` 番目 ( 0 起点) のゲームが完了したときに呼ばれる．
+    fn on_game_complete(&self, game_index: usize, summary: &GameSummary);
+}
 
 /// バッチ実行設定．
 pub struct BatchConfig {
@@ -47,6 +56,8 @@ pub struct BatchConfig {
     pub max_moves: Option<u32>,
     /// 全局イベントを 1 ファイルに集約する JSONL ログ．
     pub jsonl_log_path: Option<PathBuf>,
+    /// 各ゲーム完了時に呼ばれるコールバック ( 進捗バー等)．
+    pub progress: Option<Arc<dyn ProgressCallback>>,
 }
 
 impl std::fmt::Debug for BatchConfig {
@@ -60,6 +71,7 @@ impl std::fmt::Debug for BatchConfig {
             .field("board_size", &self.board_size)
             .field("max_moves", &self.max_moves)
             .field("jsonl_log_path", &self.jsonl_log_path)
+            .field("progress", &self.progress.as_ref().map(|_| "<callback>"))
             .finish()
     }
 }
@@ -75,6 +87,7 @@ impl Default for BatchConfig {
             board_size: BoardSize::STANDARD,
             max_moves: None,
             jsonl_log_path: None,
+            progress: None,
         }
     }
 }
@@ -375,14 +388,19 @@ impl BatchRunner {
             buf.flush()?;
         }
 
-        Ok(GameSummary {
+        let summary = GameSummary {
             game_id,
             black_score: result.black,
             white_score: result.white,
             winner: result.winner,
             total_moves: result.total_moves,
             colors_swapped,
-        })
+        };
+        // 進捗コールバック
+        if let Some(cb) = self.config.progress.as_ref() {
+            cb.on_game_complete(index, &summary);
+        }
+        Ok(summary)
     }
 }
 
@@ -476,6 +494,9 @@ impl Player for ColorAdapter {
     fn reset(&mut self) {
         self.inner.reset()
     }
+    fn evaluator(&mut self) -> Option<&mut dyn othello_player::Evaluator> {
+        self.inner.evaluator()
+    }
 }
 
 #[cfg(test)]
@@ -501,6 +522,7 @@ mod tests {
             board_size: BoardSize::STANDARD,
             max_moves: None,
             jsonl_log_path: None,
+            progress: None,
         };
         let runner = BatchRunner::new(cfg);
         let result = runner.run(random_factory).unwrap();
@@ -520,6 +542,7 @@ mod tests {
             board_size: BoardSize::STANDARD,
             max_moves: None,
             jsonl_log_path: None,
+            progress: None,
         };
         let runner = BatchRunner::new(cfg);
         let result = runner.run(random_factory).unwrap();
@@ -538,6 +561,7 @@ mod tests {
             board_size: BoardSize::STANDARD,
             max_moves: None,
             jsonl_log_path: None,
+            progress: None,
         };
         let r1 = BatchRunner::new(BatchConfig {
             num_games: cfg.num_games,
@@ -548,6 +572,7 @@ mod tests {
             board_size: cfg.board_size,
             max_moves: cfg.max_moves,
             jsonl_log_path: None,
+            progress: None,
         })
         .run(random_factory)
         .unwrap();
@@ -560,6 +585,7 @@ mod tests {
             board_size: cfg.board_size,
             max_moves: cfg.max_moves,
             jsonl_log_path: None,
+            progress: None,
         })
         .run(random_factory)
         .unwrap();
@@ -598,6 +624,7 @@ mod tests {
             board_size: BoardSize::STANDARD,
             max_moves: None,
             jsonl_log_path: None,
+            progress: None,
         };
         let runner = BatchRunner::new(cfg);
         let result = runner.run(random_factory).unwrap();

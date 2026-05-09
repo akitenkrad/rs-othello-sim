@@ -1,6 +1,6 @@
 //! Python bindings for `rs-othello-sim` (PyO3 / maturin).
 //!
-//! Exposes [`OthelloEnv`] and [`OthelloMultiEnv`] from [`othello-rl`] to Python.
+//! Exposes [`OthelloEnv`] and [`OthelloMultiEnv`] from `othello-rl` to Python.
 //! Build with `maturin develop` (the default `cargo build` does not link Python).
 //!
 //! See `examples/python_smoke.py` for usage.

@@ -6,12 +6,16 @@
 //! random[:seed=N]
 //! greedy
 //! mcts:N[,c=F][,seed=M][,depth=D]
+//! external:PATH[,protocol=gtp|ntest][,timeout=SEC][,arg=VAL,...]
 //! ```
 //!
 //! - `mcts:N` は `simulations=N` の MCTS を指定する．
 //! - `c=F` は UCT 定数 ( デフォルト $\sqrt{2}$)．
 //! - `seed=M` は乱数 seed ( 省略時は OS 乱数)．
 //! - `depth=D` はロールアウトの最大深さ ( デフォルト 200)．
+//! - `external:PATH` は外部エンジンプロセス．`protocol` は `gtp`( デフォルト) / `ntest`．
+//!   `arg=VAL` は複数指定で順番にコマンドライン引数になる．
+//!   `timeout` は 1 手あたりの秒数 ( デフォルト 30)．
 //!
 //! ## 例
 //!
@@ -20,10 +24,18 @@
 //! - `greedy`
 //! - `mcts:1000`
 //! - `mcts:500,c=1.5,seed=42`
+//! - `external:/usr/local/bin/edax,protocol=ntest,timeout=10`
+//! - `external:./engines/egaroucid,protocol=gtp,arg=--level,arg=1`
 
-use crate::{GreedyPlayer, MctsConfig, MctsPlayer, Player, RandomPlayer};
-use othello_core::Color;
+use crate::external::Protocol;
+use crate::{
+    ExternalEngineConfig, ExternalEnginePlayer, GreedyPlayer, MctsConfig, MctsPlayer, Player,
+    RandomPlayer,
+};
+use othello_core::{BoardSize, Color};
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::time::Duration;
 
 /// SPEC のパースエラー．
 #[derive(Debug, thiserror::Error)]
@@ -67,6 +79,17 @@ pub enum PlayerSpec {
         /// ロールアウト最大深さ．
         max_rollout_depth: u32,
     },
+    /// `external:PATH[,protocol=gtp|ntest][,timeout=SEC][,arg=VAL,...]`
+    External {
+        /// 実行ファイルパス．
+        command: PathBuf,
+        /// 通信プロトコル．
+        protocol: Protocol,
+        /// 1 手あたりタイムアウト ( 秒)．
+        timeout_secs: u64,
+        /// 起動引数．
+        args: Vec<String>,
+    },
 }
 
 impl PlayerSpec {
@@ -80,6 +103,7 @@ impl PlayerSpec {
 /// `<KIND>[:k=v[,k=v]*]` または `<KIND>:N[,k=v]*` の形式をパースする．
 ///
 /// `mcts:N[,...]` のように先頭が数値の場合は `simulations=N` として扱う．
+/// `external:PATH[,...]` のように先頭がパス文字列の場合は `command=PATH` として扱う．
 pub fn parse_player_spec(input: &str) -> Result<PlayerSpec, SpecError> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -93,9 +117,12 @@ pub fn parse_player_spec(input: &str) -> Result<PlayerSpec, SpecError> {
     let kind_lower = kind.to_ascii_lowercase();
     let mut params: HashMap<String, String> = HashMap::new();
     let mut positional: Option<String> = None;
+    // `external` の `arg=VAL` のように複数許可するキーは別ベクタに集める．
+    let mut multi_args: Vec<String> = Vec::new();
 
-    // `mcts` のみ先頭位置引数 ( simulations) を許可する．
-    let allow_positional = kind_lower == "mcts";
+    // `mcts` / `external` のみ先頭位置引数を許可する．
+    let allow_positional = kind_lower == "mcts" || kind_lower == "external";
+    let kind_is_external = kind_lower == "external";
 
     if let Some(rest) = rest {
         for (idx, kv) in rest.split(',').enumerate() {
@@ -104,7 +131,13 @@ pub fn parse_player_spec(input: &str) -> Result<PlayerSpec, SpecError> {
                 continue;
             }
             if let Some((k, v)) = kv.split_once('=') {
-                params.insert(k.trim().to_string(), v.trim().to_string());
+                let key = k.trim().to_string();
+                let val = v.trim().to_string();
+                if kind_is_external && key == "arg" {
+                    multi_args.push(val);
+                } else {
+                    params.insert(key, val);
+                }
             } else if idx == 0 && allow_positional {
                 positional = Some(kv.to_string());
             } else {
@@ -158,6 +191,33 @@ pub fn parse_player_spec(input: &str) -> Result<PlayerSpec, SpecError> {
                 max_rollout_depth,
             })
         }
+        "external" => {
+            let command_str = if let Some(p) = positional {
+                p
+            } else if let Some(s) = params.get("command") {
+                s.clone()
+            } else {
+                return Err(SpecError::Format(
+                    "external requires command path: e.g. `external:./engine`".into(),
+                ));
+            };
+            let command = PathBuf::from(command_str);
+            let protocol = match params.get("protocol") {
+                Some(s) => Protocol::parse(s).map_err(|e| SpecError::InvalidParam {
+                    key: "protocol".into(),
+                    value: s.clone(),
+                    reason: e,
+                })?,
+                None => Protocol::Gtp,
+            };
+            let timeout_secs = parse_optional_u64(&params, "timeout")?.unwrap_or(30);
+            Ok(PlayerSpec::External {
+                command,
+                protocol,
+                timeout_secs,
+                args: multi_args,
+            })
+        }
         other => Err(SpecError::UnsupportedKind(other.to_string())),
     }
 }
@@ -196,6 +256,23 @@ pub fn build_player(spec: &PlayerSpec, color: Color) -> Box<dyn Player> {
             }
             Box::new(MctsPlayer::new(color, cfg))
         }
+        PlayerSpec::External {
+            command,
+            protocol,
+            timeout_secs,
+            args,
+        } => {
+            let cfg = ExternalEngineConfig {
+                command: command.clone(),
+                args: args.clone(),
+                protocol: *protocol,
+                board_size: BoardSize::STANDARD,
+                timeout: Duration::from_secs(*timeout_secs),
+                working_dir: None,
+                env: Vec::new(),
+            };
+            Box::new(ExternalEnginePlayer::new(color, cfg))
+        }
     }
 }
 
@@ -206,6 +283,7 @@ pub fn spec_name(spec: &PlayerSpec) -> &'static str {
         PlayerSpec::Random { .. } => "RandomPlayer",
         PlayerSpec::Greedy => "GreedyPlayer",
         PlayerSpec::Mcts { .. } => "MctsPlayer",
+        PlayerSpec::External { .. } => "ExternalEnginePlayer",
     }
 }
 
@@ -236,6 +314,33 @@ pub fn spec_params(spec: &PlayerSpec) -> serde_json::Value {
             m.insert(
                 "max_rollout_depth".into(),
                 serde_json::Value::from(*max_rollout_depth),
+            );
+            serde_json::Value::Object(m)
+        }
+        PlayerSpec::External {
+            command,
+            protocol,
+            timeout_secs,
+            args,
+        } => {
+            let mut m = serde_json::Map::new();
+            m.insert(
+                "command".into(),
+                serde_json::Value::from(command.display().to_string()),
+            );
+            m.insert(
+                "protocol".into(),
+                serde_json::Value::from(protocol.as_str()),
+            );
+            m.insert(
+                "timeout_secs".into(),
+                serde_json::Value::from(*timeout_secs),
+            );
+            m.insert(
+                "args".into(),
+                serde_json::Value::Array(
+                    args.iter().cloned().map(serde_json::Value::from).collect(),
+                ),
             );
             serde_json::Value::Object(m)
         }
@@ -327,10 +432,65 @@ mod tests {
             parse_player_spec("nnplayer"),
             Err(SpecError::UnsupportedKind(_))
         ));
-        assert!(matches!(
-            parse_player_spec("external:path=/bin/edax"),
-            Err(SpecError::UnsupportedKind(_))
-        ));
+    }
+
+    #[test]
+    fn parse_external_basic() {
+        let s = parse_player_spec("external:/bin/edax").unwrap();
+        match s {
+            PlayerSpec::External {
+                command,
+                protocol,
+                timeout_secs,
+                args,
+            } => {
+                assert_eq!(command, PathBuf::from("/bin/edax"));
+                assert_eq!(protocol, Protocol::Gtp);
+                assert_eq!(timeout_secs, 30);
+                assert!(args.is_empty());
+            }
+            _ => panic!("expected External"),
+        }
+    }
+
+    #[test]
+    fn parse_external_full() {
+        let s = parse_player_spec(
+            "external:./engines/edax,protocol=ntest,timeout=10,arg=--level,arg=1",
+        )
+        .unwrap();
+        match s {
+            PlayerSpec::External {
+                command,
+                protocol,
+                timeout_secs,
+                args,
+            } => {
+                assert_eq!(command, PathBuf::from("./engines/edax"));
+                assert_eq!(protocol, Protocol::Ntest);
+                assert_eq!(timeout_secs, 10);
+                assert_eq!(args, vec!["--level".to_string(), "1".to_string()]);
+            }
+            _ => panic!("expected External"),
+        }
+    }
+
+    #[test]
+    fn parse_external_command_keyed() {
+        // `command=PATH` でも指定できる
+        let s = parse_player_spec("external:command=/bin/edax,protocol=gtp").unwrap();
+        match s {
+            PlayerSpec::External { command, .. } => {
+                assert_eq!(command, PathBuf::from("/bin/edax"));
+            }
+            _ => panic!("expected External"),
+        }
+    }
+
+    #[test]
+    fn parse_external_invalid_protocol() {
+        let r = parse_player_spec("external:/bin/edax,protocol=foo");
+        assert!(matches!(r, Err(SpecError::InvalidParam { .. })));
     }
 
     #[test]
@@ -358,6 +518,15 @@ mod tests {
                 max_rollout_depth: 1,
             }),
             "MctsPlayer"
+        );
+        assert_eq!(
+            spec_name(&PlayerSpec::External {
+                command: PathBuf::from("/bin/echo"),
+                protocol: Protocol::Gtp,
+                timeout_secs: 30,
+                args: vec![],
+            }),
+            "ExternalEnginePlayer"
         );
     }
 }

@@ -6,22 +6,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `rs-othello-sim` は Othello (Reversi) のシミュレーション研究および強化学習実験のための Rust ワークスペースである．設計書は親 Obsidian vault の `設計書/Othello_シミュレータ設計書.md` を参照すること．
 
-現在は **Phase 1 ( コアゲーム) + Phase 2 ( ゲームループ層)** が実装済 ( `crates/othello-core`, `crates/othello-player`, `crates/othello-io`, `crates/othello-engine`, `crates/othello-cli`)．Phase 3 以降のクレートは将来追加される．
+現在は **Phase 1〜5 すべて完了**．`crates/` 配下の 8 つの Rust クレートと，`tools/` 配下の 3 つの Python ツール ( uv workspace) で構成されている．
 
 ## ワークスペース構成
 
 ```
 rs-othello-sim/
-├── Cargo.toml                  # workspace manifest + shared deps
+├── Cargo.toml                  # Cargo workspace manifest
+├── pyproject.toml              # uv workspace root ( tools/)
+├── CHANGELOG.md                # Phase 1〜5 の変更履歴
 ├── crates/
-│   ├── othello-core/           # Phase 1: 盤面・ルール・状態
-│   │   ├── src/                # color/coord/mv/error/bitboard/generic_board/board/rules/state
-│   │   ├── tests/              # known_games, property_tests
-│   │   └── benches/            # legal_moves, self_play (criterion)
-│   ├── othello-player/         # Phase 2: Player trait + Random/Greedy/Human
-│   ├── othello-io/             # Phase 2: GameRecord + JSON / GGF
-│   ├── othello-engine/         # Phase 2: GameEngine, GameHistory, Replayer
-│   └── othello-cli/            # Phase 2: play / simulate サブコマンド
+│   ├── othello-core/           # 盤面・ルール・状態 ( Bitboard8 / GenericBoard / Hybrid)
+│   ├── othello-player/         # Player + Evaluator trait + Random/Greedy/Human/MCTS/External
+│   │   └── src/external/       # ExternalEnginePlayer + GtpProtocol + NtestProtocol
+│   ├── othello-io/             # GameRecord + JSON / GGF / WTHOR / JSONL ロガー
+│   ├── othello-engine/         # GameEngine, GameHistory, Replayer, BatchRunner, ProgressCallback
+│   ├── othello-rl/             # Gymnasium / PettingZoo 互換 environment
+│   ├── othello-tui/            # ratatui Play / Replay / Observe ( Evaluator overlay)
+│   ├── othello-cli/            # CLI バイナリ
+│   └── othello-py/             # PyO3 Python バインディング
+├── tools/
+│   ├── visualize/              # 棋譜フレーム描画 + 学習曲線 ( matplotlib)
+│   ├── analyze/                # 棋譜統計 + 2 run 比較 ( pandas)
+│   └── tb_converter/           # JSONL → TensorBoard ( tensorboardX)
 ├── CLAUDE.md
 └── README.md
 ```
@@ -29,10 +36,10 @@ rs-othello-sim/
 ## ビルド・テスト・リント
 
 ```bash
-# ビルド
+# Rust ビルド
 cargo build --workspace
 
-# テスト
+# Rust テスト
 cargo test --workspace
 
 # 単一テスト
@@ -50,6 +57,13 @@ cargo bench
 
 # ベンチのコンパイル確認のみ
 cargo bench --no-run
+
+# Doc ( 警告 0 を目指す)
+cargo doc --workspace --no-deps
+
+# Python tools ( uv 必須)
+uv sync --all-packages
+uv run pytest
 ```
 
 ## コーディング規約
@@ -61,7 +75,12 @@ cargo bench --no-run
 - `cargo clippy --all-targets -- -D warnings` をクリーンに保つ
 - 依存クレートはワークスペースの `[workspace.dependencies]` に集約し，各クレートで `serde.workspace = true` のように継承
 
-## 主要設計判断 ( Phase 1〜2)
+Python ツール:
+- `ruff` でフォーマット・リント
+- 型ヒント付与 ( 全関数シグネチャ)
+- `pytest` で smoke test を追加
+
+## 主要設計判断 ( Phase 1〜5)
 
 - **Hybrid 盤面**: 8×8 では `Bitboard8` ( `u64 × 2`) で高速化．$4 \times 4$ から $26 \times 26$ までは `GenericBoard` ( `Vec<Option<Color>>`)
 - **Bitboard レイアウト**: `bit_index = row * 8 + col` ( 行 0 列 0 = bit 0)
@@ -70,6 +89,9 @@ cargo bench --no-run
 - **Full snapshot history**: GameHistory は各手後の `GameState` をすべて保持．`step_forward` / `step_backward` / `jump_to(n)` を $O(1)$ で提供
 - **Pass の自動化**: 合法手なし時は engine が自動 Pass．Player が合法手ありで Pass を返したらエラー
 - **棋譜 I/O の中立表現**: `GameRecord` を中間形式とし，JSON / GGF Reader/Writer を切り替え可能
+- **Evaluator trait** ( Phase 5): MCTS の visit count や NN policy 値を覗くための補助 trait．`Player::evaluator()` が `Option<&mut dyn Evaluator>` を返す ( デフォルトは `None`)．`MctsPlayer` のみ実装．TUI Observe overlay で利用
+- **External engine 連携** ( Phase 5): GTP / ntest 2 種類のプロトコル．`std::process::Command` 同期 IO + 別スレッド + `mpsc::channel` で 1 手タイムアウトをソフト実装．`tokio` は使わない
+- **進捗バー** ( Phase 5): `BatchConfig.progress: Option<Arc<dyn ProgressCallback>>` で各局完了時にコールバック．CLI 側で `indicatif::ProgressBar` をラップ
 
 ## Markdown ファイル規約
 
@@ -82,14 +104,14 @@ cargo bench --no-run
 - `git init` はユーザが行う ( Claude は実行しない)
 - 自動コミットは行わない
 
-## 将来の Phase で追加予定のクレート
+## Phase 完了状況
 
-設計書 §10 に従い段階的に実装する．
+設計書 §10 に従い段階的に実装した．
 
 | Phase | 追加クレート / 機能 | 状態 |
 |---|---|---|
 | Phase 1 | `othello-core` | 完了 |
 | Phase 2 | `othello-player`, `othello-engine`, `othello-io`, `othello-cli` ( play / simulate) | 完了 |
-| Phase 3 | `othello-tui`，WTHOR 読込，JSONL ロガー，`convert` / `inspect` / `replay` | 未着手 |
-| Phase 4 | `othello-rl`, `othello-py`，`BatchRunner` + `selfplay`，MCTS | 未着手 |
-| Phase 5 | 外部エンジン連携 ( Edax/Egaroucid)，`tools/` 可視化 | 未着手 |
+| Phase 3 | `othello-tui`，WTHOR 読込，JSONL ロガー，`convert` / `inspect` / `replay` | 完了 |
+| Phase 4 | `othello-rl`, `othello-py`，`BatchRunner` + `selfplay`，MCTS | 完了 |
+| Phase 5 | 外部エンジン連携 ( gtp / ntest)，`tools/` 可視化・分析・TensorBoard，indicatif 進捗バー，Evaluator overlay | 完了 |
