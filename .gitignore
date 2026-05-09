@@ -27,3 +27,21 @@ tarpaulin-report.json
 
 # Criterion
 /criterion/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+.uv/
+
+# Maturin / build artifacts
+*.so
+*.dylib
+*.pyd
+build/
+dist/
+wheels/
