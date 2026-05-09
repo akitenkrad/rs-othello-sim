@@ -1,0 +1,20 @@
+[package]
+name = "othello-io"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Othello 棋譜の入出力 ( JSON / GGF) と形式中立 GameRecord 表現"
+
+[dependencies]
+othello-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }

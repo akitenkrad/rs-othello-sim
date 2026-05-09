@@ -1,0 +1,22 @@
+[package]
+name = "othello-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "rs-othello-sim の CLI フロントエンド ( play, simulate サブコマンド)"
+
+[[bin]]
+name = "othello-cli"
+path = "src/main.rs"
+
+[dependencies]
+othello-core = { workspace = true }
+othello-player = { workspace = true }
+othello-engine = { workspace = true }
+othello-io = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
