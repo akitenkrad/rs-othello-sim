@@ -20,7 +20,7 @@ for the engine binaries used to validate or annotate those records see
 ## WTHOR — French Othello Federation
 
 - Landing page: <https://www.ffothello.org/informatique/la-base-wthor/>
-- Yearly archives are distributed as `wth_YYYY.wtb` files (sometimes inside `.zip`). Auxiliary `JOUEUR.JOU` and `TOURNOI.TOU` lookup tables map player / tournament IDs to names.
+- Yearly archives are distributed as `WTH_YYYY.wtb` files (sometimes inside `.zip`). Auxiliary `JOUEUR.JOU` and `TOURNOI.TOU` lookup tables map player / tournament IDs to names.
 - Format details: see [`docs/record-formats.md` → WTHOR](record-formats.md). The header is 16 bytes, each game 68 bytes (8 bytes of metadata + 60 bytes of move codes).
 - WTHOR encodes only `real_score` and a sequence of move bytes. Passes are *implicit* — when a player has no legal move the move byte simply skips. The reader in `othello-io::wthor` replays each game on a `Board::standard_8x8()` and inserts a `Move::Pass` when the side to move has no legal moves.
 - License: free for research and non-commercial use; redistribution and academic use require crediting the Fédération Française d'Othello.
@@ -33,15 +33,15 @@ othello-cli fetch wthor --year 2023 --dest data/wthor/
 othello-cli fetch wthor --years 2020..2023 --dest data/wthor/
 
 # 1. Fetch (browser or curl).
-curl -L -o wth_2023.zip https://www.ffothello.org/wthor/wth_2023.zip
-unzip wth_2023.zip
+curl -L -o WTH_2023.ZIP https://www.ffothello.org/wthor/base_zip/WTH_2023.ZIP
+unzip WTH_2023.ZIP
 
 # 2. Inspect (per-file aggregates: counts, win rates, average length, year).
-./target/release/othello-cli inspect --file wth_2023.wtb --format wthor
+./target/release/othello-cli inspect --file WTH_2023.wtb --format wthor
 
 # 3. Convert into per-game JSON files (one game per file under data/wthor_2023/).
 ./target/release/othello-cli convert \
-  --input wth_2023.wtb --input-format wthor \
+  --input WTH_2023.wtb --input-format wthor \
   --output-format json --output-dir data/wthor_2023/
 
 # 4. Replay the first game with auto-play.

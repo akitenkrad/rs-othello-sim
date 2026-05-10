@@ -11,9 +11,10 @@ use std::path::PathBuf;
 fn make_header(n_games: u32, year: u16) -> [u8; 16] {
     let mut h = [0u8; 16];
     h[4..8].copy_from_slice(&n_games.to_le_bytes());
-    h[8..10].copy_from_slice(&year.to_le_bytes());
-    h[10] = 8; // board size
-    h[11] = 0; // Othello
+    // bytes 8-9: secondary record count (left zero)
+    h[10..12].copy_from_slice(&year.to_le_bytes());
+    h[12] = 8; // board size
+    h[13] = 0; // Othello
     h
 }
 

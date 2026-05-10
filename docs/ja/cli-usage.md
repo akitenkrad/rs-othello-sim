@@ -99,7 +99,7 @@ othello-cli fetch wthor --year 2023 \
 | `--year N` | _( 必須)_ | 単一年 ( 例 `--year 2023`)．`--years` と排他 |
 | `--years A..B` | _( 必須)_ | 両端含む範囲 ( 例 `--years 2020..2023`)．`--year` と排他 |
 | `--dest PATH` | `data/wthor/` | 展開先ディレクトリ ( 未作成なら作成) |
-| `--force` | `false` | 既に `wth_YYYY.wtb` が展開済みでも再取得 |
+| `--force` | `false` | 既に `WTH_YYYY.wtb` が展開済みでも再取得 |
 | `--keep-archive` | `false` | ダウンロードした `.zip` を削除しない |
 | `--url-pattern URL` | _( なし)_ | URL テンプレートを上書き．`{YEAR}` プレースホルダ必須 |
 | `--no-progress` | _( 自動)_ | 進捗バーを抑制 ( 既定: stderr が tty なら表示) |
@@ -110,7 +110,7 @@ othello-cli fetch wthor --year 2023 \
 
 1. `--url-pattern` フラグ
 2. 環境変数 `OTHELLO_WTHOR_URL_PATTERN`
-3. 組み込みデフォルト `https://www.ffothello.org/wthor/wth_{YEAR}.zip`
+3. 組み込みデフォルト `https://www.ffothello.org/wthor/base_zip/WTH_{YEAR}.ZIP`
 
 FFO 側でアーカイブの配置が変わって既定 URL が 404 を返す場合，CLI は失敗 URL とともに <https://www.ffothello.org/informatique/la-base-wthor/> と `--url-pattern` / 環境変数による上書き方法を提示します．新しい URL を確認するか，`curl` + `unzip` で手動取得してください．
 

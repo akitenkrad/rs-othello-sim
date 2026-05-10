@@ -9,12 +9,12 @@
 //! |--------|------|--------------------------------------------|
 //! | 0      | 4    | Creation date (CC YY MM DD)                |
 //! | 4      | 4    | Number of games (u32 LE)                   |
-//! | 8      | 2    | Record year (u16 LE)                       |
-//! | 10     | 1    | Board size (0 or 8 -> treat as 8)          |
-//! | 11     | 1    | Game kind (0 = Othello)                    |
-//! | 12     | 1    | Depth                                      |
-//! | 13     | 1    | Reserved                                   |
-//! | 14-15  | 2    | Unused                                     |
+//! | 8      | 2    | Number of records (u16 LE)                 |
+//! | 10     | 2    | Record year (u16 LE)                       |
+//! | 12     | 1    | Board size (0 or 8 -> treat as 8)          |
+//! | 13     | 1    | Game kind (0 = Othello; FFO releases sometimes use other values such as 7) |
+//! | 14     | 1    | Depth                                      |
+//! | 15     | 1    | Reserved                                   |
 //!
 //! Per-game block (68 bytes):
 //!
@@ -55,19 +55,27 @@ pub struct WthorHeader {
     pub year: u16,
     /// Board size (typically 8).
     pub board_size: u8,
+    /// Raw game-kind byte. The original WTHOR specification defines `0`
+    /// for Othello, but recent FFO archives have been observed using
+    /// non-zero values (e.g. `7`). The reader tolerates any value and
+    /// always interprets the records as Othello, since `WTH_*.wtb`
+    /// files are conventionally Othello archives.
+    pub game_kind: u8,
 }
 
 impl WthorHeader {
     /// Parses 16 bytes of header data.
     pub fn parse(buf: &[u8; 16]) -> Result<Self, IoError> {
         let n_games = u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]);
-        let year = u16::from_le_bytes([buf[8], buf[9]]);
-        let raw_size = buf[10];
-        let game_kind = buf[11];
+        // bytes 8-9 hold the secondary record count, which we ignore.
+        let year = u16::from_le_bytes([buf[10], buf[11]]);
+        let raw_size = buf[12];
+        let game_kind = buf[13];
         if game_kind != 0 {
-            return Err(IoError::Parse(format!(
-                "WTHOR game kind is not Othello: {game_kind}"
-            )));
+            tracing::debug!(
+                game_kind,
+                "WTHOR game kind byte is not 0; treating archive as Othello anyway"
+            );
         }
         let board_size = if raw_size == 0 { 8 } else { raw_size };
         if !(4..=26).contains(&board_size) {
@@ -79,6 +87,7 @@ impl WthorHeader {
             n_games,
             year,
             board_size,
+            game_kind,
         })
     }
 }
@@ -309,12 +318,13 @@ mod tests {
         h[3] = 0;
         // bytes 4-7: n_games (LE)
         h[4..8].copy_from_slice(&n_games.to_le_bytes());
-        // bytes 8-9: year (LE)
-        h[8..10].copy_from_slice(&year.to_le_bytes());
-        // byte 10: board size = 8
-        h[10] = 8;
-        // byte 11: kind = 0 (Othello)
-        h[11] = 0;
+        // bytes 8-9: secondary record count (unused; left zero)
+        // bytes 10-11: year (LE)
+        h[10..12].copy_from_slice(&year.to_le_bytes());
+        // byte 12: board size = 8
+        h[12] = 8;
+        // byte 13: kind = 0 (Othello)
+        h[13] = 0;
         h
     }
 
@@ -357,11 +367,13 @@ mod tests {
     }
 
     #[test]
-    fn header_rejects_non_othello_kind() {
+    fn header_records_non_zero_game_kind() {
+        // Recent FFO archives have shipped with non-zero game-kind bytes.
+        // The reader should accept them and expose the raw value.
         let mut h = make_header(1, 2020);
-        h[11] = 5; // not Othello
-        let r = WthorHeader::parse(&h);
-        assert!(matches!(r, Err(IoError::Parse(_))));
+        h[13] = 7;
+        let parsed = WthorHeader::parse(&h).expect("should accept non-zero game_kind");
+        assert_eq!(parsed.game_kind, 7);
     }
 
     #[test]

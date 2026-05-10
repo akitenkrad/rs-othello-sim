@@ -17,7 +17,8 @@ use tracing::{info, warn};
 /// If the layout of ffothello.org changes, this can be overridden via the
 /// `OTHELLO_WTHOR_URL_PATTERN` environment variable or the `--url-pattern`
 /// flag.
-pub const DEFAULT_WTHOR_URL_PATTERN: &str = "https://www.ffothello.org/wthor/wth_{YEAR}.zip";
+pub const DEFAULT_WTHOR_URL_PATTERN: &str =
+    "https://www.ffothello.org/wthor/base_zip/WTH_{YEAR}.ZIP";
 
 /// Environment variable used to override the WTHOR URL pattern.
 pub const WTHOR_URL_ENV: &str = "OTHELLO_WTHOR_URL_PATTERN";

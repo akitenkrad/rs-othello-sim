@@ -116,7 +116,7 @@ extracts the `.wtb` (and any companion `.JOU` / `.TOU`) files into
 | `--year N` | _(required)_ | Single year, e.g. `--year 2023` (mutually exclusive with `--years`) |
 | `--years A..B` | _(required)_ | Inclusive range, e.g. `--years 2020..2023` (mutually exclusive with `--year`) |
 | `--dest PATH` | `data/wthor/` | Destination directory (created if missing) |
-| `--force` | `false` | Overwrite even if `wth_YYYY.wtb` is already extracted |
+| `--force` | `false` | Overwrite even if `WTH_YYYY.wtb` is already extracted |
 | `--keep-archive` | `false` | Do not delete the downloaded `.zip` after extraction |
 | `--url-pattern URL` | _(none)_ | Override the URL template; must contain the literal `{YEAR}` placeholder |
 | `--no-progress` | _(auto)_ | Disable the progress bar (tty auto-detected otherwise) |
@@ -127,7 +127,7 @@ Resolution order (first non-empty wins):
 
 1. `--url-pattern` flag.
 2. Environment variable `OTHELLO_WTHOR_URL_PATTERN`.
-3. Built-in default `https://www.ffothello.org/wthor/wth_{YEAR}.zip`.
+3. Built-in default `https://www.ffothello.org/wthor/base_zip/WTH_{YEAR}.ZIP`.
 
 If the FFO website reorganises its archive layout the bundled URL may
 return `404`. In that case the CLI prints the failing URL together with

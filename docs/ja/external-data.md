@@ -16,7 +16,7 @@
 ## WTHOR — フランスオセロ連盟
 
 - 配布: <https://www.ffothello.org/informatique/la-base-wthor/>
-- 年次アーカイブは `wth_YYYY.wtb` ( 場合により `.zip` 内) で配布されます．補助テーブル `JOUEUR.JOU` ( 棋士 ID → 名前) ， `TOURNOI.TOU` ( 大会 ID → 名前) も同梱されます．
+- 年次アーカイブは `WTH_YYYY.wtb` ( 場合により `.zip` 内) で配布されます．補助テーブル `JOUEUR.JOU` ( 棋士 ID → 名前) ， `TOURNOI.TOU` ( 大会 ID → 名前) も同梱されます．
 - フォーマット詳細: [`docs/record-formats.md` の WTHOR 節](record-formats.md) ．ヘッダ 16 byte ＋ 各局 68 byte ( メタ 8 + 手順 60) ．
 - WTHOR は終局石数 ( `real_score`) と手の連続バイト列のみを持ちます．Pass は **暗黙** で記録されない ( 合法手が無いプレイヤーの手は単純にスキップされる) ため， `othello-io::wthor` の Reader は `Board::standard_8x8()` 上で再生し，合法手が無い手番に到達すると `Move::Pass` を挿入してから次のバイトに進みます．
 - ライセンス: 研究・非商用利用は自由．再配布や学術利用には Fédération Française d'Othello のクレジットが必要．
@@ -29,15 +29,15 @@ othello-cli fetch wthor --year 2023 --dest data/wthor/
 othello-cli fetch wthor --years 2020..2023 --dest data/wthor/
 
 # 1. 取得 ( ブラウザ or curl)
-curl -L -o wth_2023.zip https://www.ffothello.org/wthor/wth_2023.zip
-unzip wth_2023.zip
+curl -L -o WTH_2023.ZIP https://www.ffothello.org/wthor/base_zip/WTH_2023.ZIP
+unzip WTH_2023.ZIP
 
 # 2. ファイル全体の集計 ( 局数・勝率・平均手数・年)
-./target/release/othello-cli inspect --file wth_2023.wtb --format wthor
+./target/release/othello-cli inspect --file WTH_2023.wtb --format wthor
 
 # 3. 局単位の JSON に変換 ( data/wthor_2023/ に game_00001.json など)
 ./target/release/othello-cli convert \
-  --input wth_2023.wtb --input-format wthor \
+  --input WTH_2023.wtb --input-format wthor \
   --output-format json --output-dir data/wthor_2023/
 
 # 4. 1 局を自動再生で確認
