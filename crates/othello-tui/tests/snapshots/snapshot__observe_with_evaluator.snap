@@ -1,14 +1,14 @@
 ---
 source: crates/othello-tui/tests/snapshot.rs
-assertion_line: 83
+assertion_line: 84
 expression: s
 ---
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │rs-othello-sim v0.1.0    [Mode: Observe]    [Move 0/0]                        │
 └──────────────────────────────────────────────────────────────────────────────┘
 ┌ Board ───────────────────────────────┐┌ Game Info ───────────────────────────┐
-│   a b c d e f g h                    ││Black: 2  White: 2                    │
-│ 1  .  .  .  .  .  .  .  .            ││Side: Black                           │
+│    a  b  c  d  e  f  g  h            ││Black (X): 2   White (O): 2           │
+│ 1  .  .  .  .  .  .  .  .            ││Side: Black (X)                       │
 │ 2  .  .  .  .  .  .  .  .            ││Last: -                               │
 │ 3  .  .  .  .  .  .  .  .            ││Observe (Space=step, a=auto,          │
 │ 4  .  .  .  O  X  .  .  .            │└──────────────────────────────────────┘
@@ -17,8 +17,8 @@ expression: s
 │ 7  .  .  .  .  .  .  .  .            ││                                      │
 │ 8  .  .  .  .  .  .  .  .            │└──────────────────────────────────────┘
 │                                      │┌ Players ─────────────────────────────┐
-│                                      ││Black: MctsPlayer                     │
-│                                      ││White: RandomPlayer                   │
+│                                      ││Black (X): MctsPlayer                 │
+│                                      ││White (O): RandomPlayer               │
 │                                      │└──────────────────────────────────────┘
 │                                      │┌ Evaluator ───────────────────────────┐
 │                                      ││Source: MctsPlayer                    │

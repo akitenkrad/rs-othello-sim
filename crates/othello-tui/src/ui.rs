@@ -74,10 +74,12 @@ pub fn build_board_lines(app: &AppState) -> Vec<Line<'static>> {
     let size = app.state.board.size();
     let mut lines = Vec::with_capacity((size.rows as usize) + 2);
 
-    // 列ヘッダ
+    // 列ヘッダ ( 各文字を 3 桁幅で配置．行内のセル幅 ` X ` と一致させる)
     let mut header = String::from("   ");
     for c in 0..size.cols {
-        header.push((b'a' + c) as char);
+        let ch = (b'a' + c) as char;
+        header.push(' ');
+        header.push(ch);
         header.push(' ');
     }
     lines.push(Line::from(header));
@@ -172,9 +174,13 @@ fn render_game_info(frame: &mut Frame, area: Rect, app: &AppState) {
         Some(othello_core::Move::Pass) => "pass".to_string(),
         None => "-".to_string(),
     };
+    let side_label = match app.state.side_to_move {
+        Color::Black => "Black (X)",
+        Color::White => "White (O)",
+    };
     let lines = vec![
-        Line::from(format!("Black: {black}  White: {white}")),
-        Line::from(format!("Side: {:?}", app.state.side_to_move)),
+        Line::from(format!("Black (X): {black}   White (O): {white}")),
+        Line::from(format!("Side: {side_label}")),
         Line::from(format!("Last: {last}")),
         Line::from(app.message.clone()),
     ];
@@ -197,8 +203,8 @@ fn render_history(frame: &mut Frame, area: Rect, app: &AppState) {
 
 fn render_players(frame: &mut Frame, area: Rect, app: &AppState) {
     let lines = vec![
-        Line::from(format!("Black: {}", app.players.0)),
-        Line::from(format!("White: {}", app.players.1)),
+        Line::from(format!("Black (X): {}", app.players.0)),
+        Line::from(format!("White (O): {}", app.players.1)),
     ];
     let block = Block::default().borders(Borders::ALL).title(" Players ");
     let p = Paragraph::new(lines).block(block);
@@ -245,10 +251,12 @@ mod tests {
     #[test]
     fn renders_play_mode_initial() {
         let app = AppState::new_play(GameState::standard_8x8());
-        let s = render_to_string(&app, 80, 24);
+        let s = render_to_string(&app, 100, 30);
         assert!(s.contains("Mode: Play"));
         assert!(s.contains("Black"));
-        assert!(s.contains("a b c d e f g h"));
+        // Each header letter sits in a 3-cell column ` X `; consecutive cells
+        // share their separator space so the visible letters are 2 spaces apart.
+        assert!(s.contains("a  b  c  d  e  f  g  h"));
     }
 
     #[test]
