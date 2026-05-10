@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `docs/external-data.md` (English) and `docs/ja/external-data.md`
+  (Japanese): a survey of public Othello game-record sources (WTHOR,
+  GGF / GGS archives, online play sites) plus synthetic / research
+  datasets, with import workflow examples, license / citation notes,
+  and cross-links from the record-formats page and the README docs
+  index.
 - TUI Replay mode: tunable auto-play with `[Space]` / `[a]` toggle,
   `[+]` / `[-]` to adjust the per-move delay (100 ms steps, clamped to
   `[50, 5000]` ms). The delay is shown in the header as `[AUTO <ms>ms]`

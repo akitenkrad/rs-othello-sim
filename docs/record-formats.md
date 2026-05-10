@@ -153,6 +153,8 @@ emit one alongside individual JSON records.
 
 ## See also
 
+- [External data sources](external-data.md) for where to obtain WTHOR
+  / GGF / online-site records and the recommended import workflow.
 - [Self-play & batch runs](self-play.md) for the directory layout
   produced by `--log-dir auto`.
 - [Tools (visualize / analyze / TB)](tools-visualize.md) for the

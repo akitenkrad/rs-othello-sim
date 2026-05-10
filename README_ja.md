@@ -35,6 +35,7 @@ PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop --release
 - [TUI ガイド](docs/ja/tui-guide.md)
 - [Self-play & バッチ実行](docs/ja/self-play.md)
 - [レコードフォーマット](docs/ja/record-formats.md)
+- [外部データソース](docs/ja/external-data.md)
 - [外部 Engine](docs/ja/external-engines.md)
 - [Python バインディング & RL](docs/ja/python-rl.md)
 - [ツール ( visualize / analyze / TB )](docs/ja/tools-visualize.md)

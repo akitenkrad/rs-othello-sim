@@ -129,6 +129,7 @@ JSONL は棋譜アーカイブではなくイベントログのため， `conver
 
 ## 関連項目
 
+- [外部データソース](external-data.md) — WTHOR / GGF / オンラインサイト棋譜の入手先と，推奨の取り込みワークフロー．
 - [Self-play & バッチ実行](self-play.md) — `--log-dir auto` が生成するディレクトリレイアウト．
 - [ツール ( visualize / analyze / TB )](tools-visualize.md) — 両フォーマットを消費する Python ユーティリティ群．
 - `crates/othello-io/src/` — reader / writer のソース．
