@@ -12,7 +12,7 @@ for the engine binaries used to validate or annotate those records see
 
 | Source | Format | Volume | License | Importer |
 |---|---|---|---|---|
-| WTHOR (French Othello Federation) | `.wtb` binary | ~1977–present, hundreds of thousands of master games, updated yearly | Research / non-commercial; cite FFO | `othello-cli convert --input-format wthor` |
+| WTHOR (French Othello Federation) | `.wtb` binary | ~1977–present, hundreds of thousands of master games, updated yearly | Research / non-commercial; cite FFO | `othello-cli fetch wthor` then `convert --input-format wthor` |
 | GGS / GGF archives | `.ggf` text | Computer & online matches, decades of archives | Archive-specific; check before redistribution | `othello-cli convert --input-format ggf` |
 | Online play sites (eOthello / Othello Quest / GGS) | Per-site (often GGF or JSON) | Per-account or per-tournament | Per-site terms of service | After conversion to GGF or JSON |
 | Self-generated (`selfplay`) | JSON + JSONL | Bounded only by compute | MIT (this repo) | Native |
@@ -26,6 +26,12 @@ for the engine binaries used to validate or annotate those records see
 - License: free for research and non-commercial use; redistribution and academic use require crediting the Fédération Française d'Othello.
 
 ```bash
+# 0. Use the bundled fetcher (recommended; auto-extracts and dedupes).
+othello-cli fetch wthor --year 2023 --dest data/wthor/
+
+# Or fetch a range of years in one go:
+othello-cli fetch wthor --years 2020..2023 --dest data/wthor/
+
 # 1. Fetch (browser or curl).
 curl -L -o wth_2023.zip https://www.ffothello.org/wthor/wth_2023.zip
 unzip wth_2023.zip

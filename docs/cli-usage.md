@@ -86,6 +86,63 @@ adjusts the delay by 100 ms, `0` / `$` jump to start / end, and `<-` /
 `->` (or `h` / `l`) step manually. See
 [TUI guide](tui-guide.md#replay-mode) for the full key map.
 
+## `fetch` — Download public datasets
+
+```bash
+# List supported datasets
+othello-cli fetch list
+
+# Single year
+othello-cli fetch wthor --year 2023 --dest data/wthor/
+
+# Inclusive year range
+othello-cli fetch wthor --years 2020..2023 --dest data/wthor/
+
+# Force a refresh of an already-extracted year
+othello-cli fetch wthor --year 2023 --force
+
+# Custom URL pattern (in case the FFO layout changes)
+othello-cli fetch wthor --year 2023 \
+  --url-pattern 'https://example.org/wthor/wth_{YEAR}.zip'
+```
+
+The `wthor` provider downloads per-year archives from the
+[French Othello Federation (FFO)](https://www.ffothello.org/informatique/la-base-wthor/),
+extracts the `.wtb` (and any companion `.JOU` / `.TOU`) files into
+`--dest`, and removes the intermediate `.zip` afterwards.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--year N` | _(required)_ | Single year, e.g. `--year 2023` (mutually exclusive with `--years`) |
+| `--years A..B` | _(required)_ | Inclusive range, e.g. `--years 2020..2023` (mutually exclusive with `--year`) |
+| `--dest PATH` | `data/wthor/` | Destination directory (created if missing) |
+| `--force` | `false` | Overwrite even if `wth_YYYY.wtb` is already extracted |
+| `--keep-archive` | `false` | Do not delete the downloaded `.zip` after extraction |
+| `--url-pattern URL` | _(none)_ | Override the URL template; must contain the literal `{YEAR}` placeholder |
+| `--no-progress` | _(auto)_ | Disable the progress bar (tty auto-detected otherwise) |
+
+### URL pattern resolution
+
+Resolution order (first non-empty wins):
+
+1. `--url-pattern` flag.
+2. Environment variable `OTHELLO_WTHOR_URL_PATTERN`.
+3. Built-in default `https://www.ffothello.org/wthor/wth_{YEAR}.zip`.
+
+If the FFO website reorganises its archive layout the bundled URL may
+return `404`. In that case the CLI prints the failing URL together with
+a pointer to <https://www.ffothello.org/informatique/la-base-wthor/>
+and the `--url-pattern` / environment-variable override; either obtain
+the new URL there or fall back to manual `curl` + `unzip`.
+
+### License reminder
+
+WTHOR is distributed by the **Fédération Française d'Othello** for
+research and non-commercial use; cite the FFO and the year of the
+archive when you redistribute or publish results. See
+[`docs/external-data.md`](external-data.md) for the full license and
+attribution checklist.
+
 ## `convert` — Record format conversion
 
 ```bash

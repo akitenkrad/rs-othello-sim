@@ -60,6 +60,8 @@ enum Command {
     Benchmark(commands::benchmark::Args),
     /// AI 対戦の TUI 観戦．
     Observe(commands::observe::Args),
+    /// 公開データセット ( WTHOR 等) のダウンロード．
+    Fetch(commands::fetch::Args),
 }
 
 fn init_tracing(level: &str, format: LogFormat, log_file: Option<&PathBuf>) -> Result<()> {
@@ -117,5 +119,6 @@ fn main() -> Result<()> {
         Command::Selfplay(args) => commands::selfplay::run(args),
         Command::Benchmark(args) => commands::benchmark::run(args),
         Command::Observe(args) => commands::observe::run(args),
+        Command::Fetch(args) => commands::fetch::run(args),
     }
 }

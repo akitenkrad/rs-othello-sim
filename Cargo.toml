@@ -51,11 +51,14 @@ rayon = "1"
 pyo3 = { version = "0.22", default-features = false, features = ["macros"] }
 numpy = "0.22"
 indicatif = "0.17"
+ureq = { version = "2", default-features = false, features = ["tls"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
 
 # dev-dependencies (テスト・ベンチ共通)
 proptest = "1"
 criterion = { version = "0.5", features = ["html_reports"] }
 insta = "1"
+tiny_http = "0.12"
 
 [profile.release]
 opt-level = 3

@@ -15,6 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `othello-cli fetch <dataset>` subcommand with a `wthor` provider that
+  downloads per-year (`--year N`) or range (`--years A..B`) archives
+  from the FFO website, extracts the `.wtb` files into the destination
+  directory, and skips work that is already done unless `--force` is
+  passed. The URL pattern can be overridden with `--url-pattern` or the
+  `OTHELLO_WTHOR_URL_PATTERN` environment variable. `othello-cli fetch
+  list` enumerates supported datasets.
 - `docs/external-data.md` (English) and `docs/ja/external-data.md`
   (Japanese): a survey of public Othello game-record sources (WTHOR,
   GGF / GGS archives, online play sites) plus synthetic / research

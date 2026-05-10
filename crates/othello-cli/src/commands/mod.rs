@@ -2,6 +2,7 @@
 
 pub mod benchmark;
 pub mod convert;
+pub mod fetch;
 pub mod inspect;
 pub mod observe;
 pub mod play;

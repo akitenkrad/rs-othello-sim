@@ -72,6 +72,52 @@ othello-cli replay --file game.json --format json --auto --auto-delay 250
 
 Replay 画面内では `Space` または `a` で自動再生 ON/OFF， `+` / `-` で間隔を 100 ms 単位で増減， `0` / `$` で先頭 / 末尾へジャンプ， `<-` / `->` ( または `h` / `l`) で手動進退します．キー一覧は [TUI ガイド](tui-guide.md#replay-モード) を参照してください．
 
+## `fetch` — 公開データセットのダウンロード
+
+```bash
+# 対応データセットの一覧
+othello-cli fetch list
+
+# 単一年
+othello-cli fetch wthor --year 2023 --dest data/wthor/
+
+# 範囲指定 ( 両端含む)
+othello-cli fetch wthor --years 2020..2023 --dest data/wthor/
+
+# 既に展開済みの年を強制再ダウンロード
+othello-cli fetch wthor --year 2023 --force
+
+# URL パターンをカスタムに ( FFO のレイアウトが変わった場合)
+othello-cli fetch wthor --year 2023 \
+  --url-pattern 'https://example.org/wthor/wth_{YEAR}.zip'
+```
+
+`wthor` プロバイダは [フランスオセロ連盟 ( FFO)](https://www.ffothello.org/informatique/la-base-wthor/) から年次アーカイブをダウンロードし， `.wtb` ( および付随する `.JOU` / `.TOU`) を `--dest` 直下に展開します．展開後は途中の `.zip` を削除します．
+
+| フラグ | デフォルト | 説明 |
+|---|---|---|
+| `--year N` | _( 必須)_ | 単一年 ( 例 `--year 2023`)．`--years` と排他 |
+| `--years A..B` | _( 必須)_ | 両端含む範囲 ( 例 `--years 2020..2023`)．`--year` と排他 |
+| `--dest PATH` | `data/wthor/` | 展開先ディレクトリ ( 未作成なら作成) |
+| `--force` | `false` | 既に `wth_YYYY.wtb` が展開済みでも再取得 |
+| `--keep-archive` | `false` | ダウンロードした `.zip` を削除しない |
+| `--url-pattern URL` | _( なし)_ | URL テンプレートを上書き．`{YEAR}` プレースホルダ必須 |
+| `--no-progress` | _( 自動)_ | 進捗バーを抑制 ( 既定: stderr が tty なら表示) |
+
+### URL パターンの解決順
+
+最初に見つかった非空の値が使われます:
+
+1. `--url-pattern` フラグ
+2. 環境変数 `OTHELLO_WTHOR_URL_PATTERN`
+3. 組み込みデフォルト `https://www.ffothello.org/wthor/wth_{YEAR}.zip`
+
+FFO 側でアーカイブの配置が変わって既定 URL が 404 を返す場合，CLI は失敗 URL とともに <https://www.ffothello.org/informatique/la-base-wthor/> と `--url-pattern` / 環境変数による上書き方法を提示します．新しい URL を確認するか，`curl` + `unzip` で手動取得してください．
+
+### ライセンスについて
+
+WTHOR は **Fédération Française d'Othello** が研究・非商用利用向けに配布しています．再配布や論文掲載時は FFO とアーカイブの年を必ずクレジットしてください．詳細は [`docs/external-data.md`](external-data.md) のライセンス・引用チェックリストを参照．
+
 ## `convert` — 棋譜フォーマットの変換
 
 ```bash

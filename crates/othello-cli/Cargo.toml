@@ -27,3 +27,9 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 chrono = { workspace = true }
 indicatif = { workspace = true }
+ureq = { workspace = true }
+zip = { workspace = true }
+
+[dev-dependencies]
+tiny_http = { workspace = true }
+zip = { workspace = true }

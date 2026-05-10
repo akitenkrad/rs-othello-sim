@@ -8,7 +8,7 @@
 
 | ソース | 形式 | 規模 | ライセンス | 取り込み |
 |---|---|---|---|---|
-| WTHOR ( フランスオセロ連盟 FFO) | `.wtb` バイナリ | 1977 年〜現在のマスター対局，年次更新 | 研究 / 非商用利用可．FFO への出典明記必須 | `othello-cli convert --input-format wthor` |
+| WTHOR ( フランスオセロ連盟 FFO) | `.wtb` バイナリ | 1977 年〜現在のマスター対局，年次更新 | 研究 / 非商用利用可．FFO への出典明記必須 | `othello-cli fetch wthor` ＋ `convert --input-format wthor` |
 | GGS / GGF アーカイブ | `.ggf` テキスト | コンピュータ・オンライン対局の長年アーカイブ | アーカイブごとに条件確認 | `othello-cli convert --input-format ggf` |
 | オンライン対戦サイト ( eOthello / Othello Quest / GGS) | サイトごと ( GGF か JSON が多い) | アカウント単位・大会単位 | サイトごとの利用規約 | GGF / JSON に変換後 |
 | 自己生成 ( `selfplay`) | JSON + JSONL | 計算資源次第 | MIT ( 本リポジトリ) | ネイティブ |
@@ -22,6 +22,12 @@
 - ライセンス: 研究・非商用利用は自由．再配布や学術利用には Fédération Française d'Othello のクレジットが必要．
 
 ```bash
+# 0. 同梱の fetcher を使う ( 推奨．自動で展開・既存スキップ)
+othello-cli fetch wthor --year 2023 --dest data/wthor/
+
+# 範囲指定で複数年を一度に取得することも可能 ( 両端含む)
+othello-cli fetch wthor --years 2020..2023 --dest data/wthor/
+
 # 1. 取得 ( ブラウザ or curl)
 curl -L -o wth_2023.zip https://www.ffothello.org/wthor/wth_2023.zip
 unzip wth_2023.zip
