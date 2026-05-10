@@ -972,12 +972,14 @@ dependencies = [
 name = "othello-player"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "othello-core",
  "proptest",
  "rand 0.8.6",
  "rand_chacha 0.3.1",
  "serde_json",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

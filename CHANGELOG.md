@@ -14,6 +14,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   run with `cargo test -p othello-player --test real_engine -- --ignored`).
 - 6.1: `docs/external-engines.md` with engine setup, license notes, and PlayerSpec reference.
 - 6.1: `.gitignore` entry for `/vendor/engines/` so fetched binaries are not committed.
+- 6.2: `MctsConfig.tree_reuse` flag and `MctsConfig::with_tree_reuse(bool)`. When
+  enabled, MctsPlayer reuses the subtree corresponding to the agent's chosen move
+  and the opponent's reply, amortising visit cost across moves. Default is `false`
+  to preserve existing behaviour.
+- 6.2: `MctsPlayer::last_root_visit_total()` accessor exposing the accumulated root
+  visit count after each `select_move` (useful for tree-reuse diagnostics and tests).
+- 6.2: `crates/othello-player/benches/mcts_tree_reuse.rs` criterion A/B benchmark
+  (compile-only in CI; run locally with `cargo bench -p othello-player`).
+- 6.2: `crates/othello-player/tests/mcts_tree_reuse.rs` integration tests covering
+  full-game play with `tree_reuse=true` on 8x8 and 4x4 boards plus first-move
+  parity with the baseline.
+- 6.2: `docs/architecture.md` describing crate dependencies, hybrid board
+  representation, MCTS internals (including tree-reuse), the `Evaluator` trait,
+  and the `BatchRunner` / `ProgressCallback` integration.
+
+### Changed
+
+- 6.2: `crates/othello-player` now depends on the workspace `tracing` crate so
+  tree-reuse fallback paths can emit `tracing::warn!` / `tracing::debug!` logs
+  on state mismatch instead of panicking.
 
 ## [0.1.0-phase5] - 2026-05-09
 
