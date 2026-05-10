@@ -59,7 +59,9 @@ pub fn map_replay_key(code: KeyCode) -> Option<Action> {
         KeyCode::Left | KeyCode::Char('h') => Some(Action::StepBackward),
         KeyCode::Char('0') => Some(Action::JumpStart),
         KeyCode::Char('$') => Some(Action::JumpEnd),
-        KeyCode::Char(' ') => Some(Action::ToggleAutoPlay),
+        KeyCode::Char(' ') | KeyCode::Char('a') => Some(Action::ToggleAutoPlay),
+        KeyCode::Char('+') | KeyCode::Char('=') => Some(Action::IncreaseDelay),
+        KeyCode::Char('-') | KeyCode::Char('_') => Some(Action::DecreaseDelay),
         _ => None,
     }
 }

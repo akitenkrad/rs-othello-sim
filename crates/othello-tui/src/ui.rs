@@ -206,7 +206,9 @@ fn render_players(frame: &mut Frame, area: Rect, app: &AppState) {
 fn render_footer(frame: &mut Frame, area: Rect, app: &AppState) {
     let hint = match app.mode {
         AppMode::Play => "Keys: [hjkl/arrows] move  [Enter/Space] place  [p] pass  [q] quit",
-        AppMode::Replay => "Keys: [<-/->] step  [0/$] start/end  [Space] auto-play  [q] quit",
+        AppMode::Replay => {
+            "Keys: [<-/->] step  [0/$] start/end  [Space/a] auto  [+/-] delay  [q] quit"
+        }
         AppMode::Observe => "Keys: [Space] step  [a] auto-play  [+/-] delay  [q] quit",
     };
     let block = Block::default().borders(Borders::ALL);

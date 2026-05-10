@@ -17,6 +17,14 @@ pub struct Args {
     /// 棋譜フォーマット．
     #[arg(long, value_enum, default_value_t = ReplayFormat::Json)]
     pub format: ReplayFormat,
+
+    /// 起動直後から自動再生を開始する．
+    #[arg(long, default_value_t = false)]
+    pub auto: bool,
+
+    /// 自動再生の手間隔 ( ミリ秒)．Replay モード内で `+` / `-` で調整可能．
+    #[arg(long, default_value_t = 500)]
+    pub auto_delay: u64,
 }
 
 /// 入力フォーマット．
@@ -42,6 +50,10 @@ pub fn run(args: Args) -> Result<()> {
             .with_context(|| "failed to read GGF record")?,
     };
     let history = othello_tui::record_to_history(&record)?;
-    othello_tui::run_replay(history)?;
+    let options = othello_tui::ReplayOptions {
+        auto_play: args.auto,
+        auto_delay_ms: args.auto_delay,
+    };
+    othello_tui::run_replay_with_options(history, options)?;
     Ok(())
 }

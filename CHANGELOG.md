@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- TUI Replay mode: tunable auto-play with `[Space]` / `[a]` toggle,
+  `[+]` / `[-]` to adjust the per-move delay (100 ms steps, clamped to
+  `[50, 5000]` ms). The delay is shown in the header as `[AUTO <ms>ms]`
+  and auto-play stops automatically when the final ply is reached.
+  Toggling auto-play at the end restarts from move 0. The CLI gains
+  `othello-cli replay --auto --auto-delay <ms>` to start in auto mode,
+  and `othello_tui::run_replay_with_options` exposes the same options
+  to library users while keeping the existing `run_replay(history)`
+  API as a thin wrapper.
 - 6.1: `scripts/fetch_engines.sh` to fetch and build Edax / Egaroucid into `vendor/engines/`.
 - 6.1: `crates/othello-player/tests/real_engine.rs` integration tests (gated behind `#[ignore]`,
   run with `cargo test -p othello-player --test real_engine -- --ignored`).

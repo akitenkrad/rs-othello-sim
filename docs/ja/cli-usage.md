@@ -58,9 +58,19 @@ othello-cli simulate \
 ```bash
 othello-cli replay --file game.json --format json
 othello-cli replay --file game.ggf  --format ggf
+
+# 250 ms/手のテンポで自動再生から開始
+othello-cli replay --file game.json --format json --auto --auto-delay 250
 ```
 
 棋譜を TUI の Replay 画面に読み込みます．各 ply のスナップショットを保持しているため，1 手前進・後退・任意の手数へのジャンプはすべて `O(1)` です．WTHOR は [`convert`](#convert--棋譜フォーマットの変換) で変換してから読み込んでください．
+
+| フラグ | 効果 |
+|---|---|
+| `--auto` | 起動直後から自動再生を開始 ( 既定では `Space` / `a` 待ち) |
+| `--auto-delay MS` | 自動再生時の手間隔 ( ミリ秒，既定 `500`，範囲 `[50, 5000]`) ．モード内で `+` / `-` により調整可能 |
+
+Replay 画面内では `Space` または `a` で自動再生 ON/OFF， `+` / `-` で間隔を 100 ms 単位で増減， `0` / `$` で先頭 / 末尾へジャンプ， `<-` / `->` ( または `h` / `l`) で手動進退します．キー一覧は [TUI ガイド](tui-guide.md#replay-モード) を参照してください．
 
 ## `convert` — 棋譜フォーマットの変換
 

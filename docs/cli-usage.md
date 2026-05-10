@@ -67,11 +67,24 @@ runs.
 ```bash
 othello-cli replay --file game.json --format json
 othello-cli replay --file game.ggf  --format ggf
+
+# Start in auto-play with a 250 ms-per-move tempo
+othello-cli replay --file game.json --format json --auto --auto-delay 250
 ```
 
 Loads the record into the TUI Replay screen with `O(1)` step-forward,
 step-backward, and jump-to-N. WTHOR can be loaded after first
 converting it via [`convert`](#convert--record-format-conversion).
+
+| Flag | Effect |
+|---|---|
+| `--auto` | Begin in auto-play mode (otherwise wait for `Space` / `a`) |
+| `--auto-delay MS` | Per-move delay in milliseconds (default `500`, clamped to `[50, 5000]`). Adjustable in-mode with `+` / `-`. |
+
+Inside the Replay screen, `Space` or `a` toggles auto-play, `+` / `-`
+adjusts the delay by 100 ms, `0` / `$` jump to start / end, and `<-` /
+`->` (or `h` / `l`) step manually. See
+[TUI guide](tui-guide.md#replay-mode) for the full key map.
 
 ## `convert` — Record format conversion
 

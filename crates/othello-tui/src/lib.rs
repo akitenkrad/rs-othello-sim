@@ -46,9 +46,34 @@ pub fn run_play(board_size: BoardSize) -> Result<()> {
 }
 
 /// Replay モードを起動する ( `GameHistory` を再生)．
+///
+/// 既定では手動進行．自動再生を最初から有効にしたい場合は [`run_replay_with_options`] を使う．
 pub fn run_replay(history: GameHistory) -> Result<()> {
+    run_replay_with_options(history, ReplayOptions::default())
+}
+
+/// Replay モードの起動オプション．
+#[derive(Debug, Clone, Copy)]
+pub struct ReplayOptions {
+    /// 起動直後から自動再生を開始するか．
+    pub auto_play: bool,
+    /// 自動再生時の手間隔 ( ミリ秒)．[50, 5000] にクランプされる．
+    pub auto_delay_ms: u64,
+}
+
+impl Default for ReplayOptions {
+    fn default() -> Self {
+        Self {
+            auto_play: false,
+            auto_delay_ms: modes::replay::DEFAULT_AUTO_DELAY_MS,
+        }
+    }
+}
+
+/// オプション付きで Replay モードを起動する．
+pub fn run_replay_with_options(history: GameHistory, options: ReplayOptions) -> Result<()> {
     let mut terminal = setup_terminal()?;
-    let result = run_replay_loop(&mut terminal, history);
+    let result = run_replay_loop(&mut terminal, history, options);
     teardown_terminal(&mut terminal)?;
     result
 }
@@ -123,12 +148,20 @@ fn run_play_loop(
 fn run_replay_loop(
     terminal: &mut Terminal<CrosstermBackend<Stdout>>,
     history: GameHistory,
+    options: ReplayOptions,
 ) -> Result<()> {
-    let mut replay = ReplayMode::new(history);
+    let mut replay = ReplayMode::with_options(history, options.auto_play, options.auto_delay_ms);
+    let mut last_step = Instant::now();
     loop {
         let app = replay.snapshot();
         terminal.draw(|f| ui::render(f, &app))?;
-        if event::poll(Duration::from_millis(200))? {
+        // auto_play 中は一定ミリ秒ごとに poll を切り上げて手を進める
+        let timeout = if replay.auto_play {
+            Duration::from_millis(replay.auto_delay_ms.min(50))
+        } else {
+            Duration::from_millis(200)
+        };
+        if event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
                 if key.kind != KeyEventKind::Press {
                     continue;
@@ -139,8 +172,12 @@ fn run_replay_loop(
                     None => {}
                 }
             }
-        } else if replay.auto_play {
-            replay.handle(Action::StepForward);
+        } else if replay.auto_play
+            && !replay.is_finished()
+            && last_step.elapsed() >= Duration::from_millis(replay.auto_delay_ms)
+        {
+            replay.auto_advance();
+            last_step = Instant::now();
         }
     }
     Ok(())

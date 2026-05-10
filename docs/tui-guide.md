@@ -60,6 +60,9 @@ warning if the cursor is on an illegal cell.
 
 ```bash
 othello-cli replay --file game.json --format json
+
+# Start in auto-play, advancing one ply every 250 ms
+othello-cli replay --file game.json --format json --auto --auto-delay 250
 ```
 
 Loads the entire record into a `Replayer`; navigation is `O(1)` because
@@ -69,14 +72,18 @@ each ply stores a full snapshot.
 |---|---|
 | `→` / `l` | Step forward one ply |
 | `←` / `h` | Step backward one ply |
-| `g` | Jump to the start |
-| `G` | Jump to the end |
-| `0`–`9` | Buffered "go to move N" (typed digits) |
+| `0` | Jump to the start |
+| `$` | Jump to the end (auto-play also stops) |
+| `Space` / `a` | Toggle auto-play. If pressed at the end, restart from move 0 |
+| `+` / `=` | Increase the auto-play delay by 100 ms (max 5000 ms) |
+| `-` / `_` | Decrease the auto-play delay by 100 ms (min 50 ms) |
 | `q` / `Esc` | Quit |
 
-The header shows `move N / TOTAL` and the score. Records that include
-metadata (player name, timestamp) display them in the right-hand
-Players panel.
+The header shows `Move N / TOTAL` and, while auto-play is active,
+appends `[AUTO <delay>ms]`. Auto-play turns itself off when it reaches
+the final ply, so you can review the position before quitting. Records
+that include metadata (player name, timestamp) display them in the
+right-hand Players panel.
 
 ## Observe mode
 
