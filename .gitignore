@@ -48,3 +48,7 @@ wheels/
 
 # Fetched real engines (Phase 6.1)
 /vendor/engines/
+
+# Fetched / converted public datasets ( WTHOR archives, derived JSON, etc.)
+# These are reproducible via `othello-cli fetch` and not part of the source.
+/data/
