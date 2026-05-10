@@ -1,32 +1,38 @@
 //! # othello-nn
 //!
-//! Phase 6.4 で追加された **NN ベース評価器** クレート．[`othello_player::Player`] と
-//! [`othello_player::Evaluator`] の双方を実装する [`NnEvaluator`] と，policy ヘッド +
-//! value ヘッドを持つ評価モデル ( [`CandleModel`] / [`OnnxModel`]) を提供する．
+//! NN-based evaluator crate added in Phase 6.4. Provides
+//! [`NnEvaluator`], which implements both [`othello_player::Player`] and
+//! [`othello_player::Evaluator`], together with policy/value evaluation
+//! models ([`CandleModel`] / [`OnnxModel`]).
 //!
-//! ## モデルの入出力
+//! ## Model I/O
 //!
-//! - 入力: `(B, 3, H, W)` の `f32` テンソル．3 channel は順に **own / opp / legal mask**
-//!   を表し，[`othello_rl::Observation::Planes`] と同じ規約に従う．
-//! - 出力: policy logits `(B, H*W + 1)` ( 末尾は Pass) と value scalar `(B,)` ( 自分視点
-//!   の勝率推定，tanh 空間 $[-1, 1]$)．
+//! - Input: `f32` tensor of shape `(B, 3, H, W)`. The three channels
+//!   are **own / opp / legal mask** in that order, following the same
+//!   convention as [`othello_rl::Observation::Planes`].
+//! - Output: policy logits `(B, H*W + 1)` (the trailing entry is the
+//!   Pass logit) and a value scalar `(B,)` (win-rate estimate from the
+//!   side to move's perspective, in tanh space $[-1, 1]$).
 //!
-//! ## バックエンド
+//! ## Backends
 //!
-//! - [`CandleModel::random_init`] — テスト用にランダム初期化された小型 ResNet を構築する．
-//! - [`CandleModel::from_safetensors`] — Candle ネイティブの safetensors ファイルから
-//!   学習済重みを読み込む．
-//! - [`OnnxModel::from_path`] — ONNX ファイルを読み込み，`candle_onnx::simple_eval` で
-//!   推論する．AlphaZero 系のモデル統合用．
+//! - [`CandleModel::random_init`] — builds a small randomly-initialized
+//!   ResNet for testing.
+//! - [`CandleModel::from_safetensors`] — loads trained weights from a
+//!   Candle-native safetensors file.
+//! - [`OnnxModel::from_path`] — loads an ONNX file and runs inference
+//!   via `candle_onnx::simple_eval`. Useful for integrating
+//!   AlphaZero-style models.
 //!
 //! ## CLI
 //!
-//! `nn:safetensors:PATH[,...]` / `nn:onnx:PATH[,...]` 形式の PlayerSpec を `othello-cli`
-//! 側で構築できる ( [`othello_player`] からは Candle 依存を分離するため，spec のパースは
-//! `othello-player` で行うが，実際の Player 構築は `othello-cli` の wrapper 関数で
-//! 行う)．
+//! `othello-cli` can build players from PlayerSpec strings of the form
+//! `nn:safetensors:PATH[,...]` or `nn:onnx:PATH[,...]`. To keep the
+//! Candle dependency isolated, the spec is parsed in `othello-player`
+//! while actual player construction happens in the `othello-cli`
+//! wrapper.
 //!
-//! ## 例
+//! ## Example
 //!
 //! ```no_run
 //! use othello_nn::{CandleModel, NnEvaluator};
@@ -56,7 +62,7 @@ pub use input::state_to_tensor;
 pub use model::{NnModel, PolicyValue};
 pub use onnx_model::OnnxModel;
 
-/// よく使う型を一括で導入するための prelude．
+/// Prelude that imports the commonly used types in one go.
 pub mod prelude {
     pub use crate::{CandleModel, NnError, NnEvaluator, NnModel, OnnxModel, PolicyValue};
 }

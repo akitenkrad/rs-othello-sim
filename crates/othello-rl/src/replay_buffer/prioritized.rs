@@ -1,11 +1,13 @@
 //! [`PrioritizedReplayBuffer`]: Prioritized Experience Replay (Schaul et al., 2015).
 //!
-//! 各 transition に priority $p_i$ を持たせ，
-//! $P(i) = p_i^\alpha / \sum_j p_j^\alpha$ で比例サンプリングする．
-//! TD error $\delta$ を観測したら $p_i = (|\delta| + \epsilon)$ で更新する．
-//! IS weight $w_i = (N \cdot P(i))^{-\beta}$ をバッチ最大値で正規化して返す．
+//! Each transition carries a priority $p_i$ and is sampled proportionally
+//! via $P(i) = p_i^\alpha / \sum_j p_j^\alpha$. After observing a TD error
+//! $\delta$ the priority is updated to $p_i = (|\delta| + \epsilon)$. The
+//! returned IS weight $w_i = (N \cdot P(i))^{-\beta}$ is normalized by the
+//! batch maximum.
 //!
-//! 効率的な比例サンプリングは [`crate::replay_buffer::sum_tree::SumTree`] を用いる．
+//! Efficient proportional sampling is implemented with
+//! [`crate::replay_buffer::sum_tree::SumTree`].
 
 use rand::Rng;
 
@@ -13,10 +15,11 @@ use crate::replay_buffer::sum_tree::SumTree;
 use crate::replay_buffer::transition::{Transition, TransitionBatch};
 use crate::replay_buffer::{ReplayBuffer, ReplayError, stack_transitions};
 
-/// Prioritized Experience Replay buffer．
+/// Prioritized Experience Replay buffer.
 ///
-/// `alpha = 0` で uniform，`alpha = 1` で priority に比例．
-/// `beta` は学習中に 1.0 まで上昇させる ( IS bias 補正)．
+/// `alpha = 0` corresponds to uniform sampling; `alpha = 1` samples
+/// strictly in proportion to priority. `beta` is annealed up to `1.0`
+/// during training to correct for IS bias.
 pub struct PrioritizedReplayBuffer {
     capacity: usize,
     buffer: Vec<Option<Transition>>,
@@ -46,11 +49,12 @@ impl std::fmt::Debug for PrioritizedReplayBuffer {
 }
 
 impl PrioritizedReplayBuffer {
-    /// 容量 `capacity` の PER buffer を作る．既定: $\alpha=0.6, \beta_0=0.4, \beta_{inc}=10^{-3}, \epsilon=10^{-6}$．
+    /// Creates a PER buffer of the given `capacity`. Defaults:
+    /// $\alpha=0.6, \beta_0=0.4, \beta_{inc}=10^{-3}, \epsilon=10^{-6}$.
     ///
     /// # Panics
     ///
-    /// `capacity == 0` で panic．
+    /// Panics if `capacity == 0`.
     #[must_use]
     pub fn new(capacity: usize) -> Self {
         assert!(capacity > 0, "ReplayBuffer capacity must be > 0");
@@ -72,49 +76,49 @@ impl PrioritizedReplayBuffer {
         }
     }
 
-    /// `alpha` を設定する ( builder)．
+    /// Sets `alpha` (builder).
     #[must_use]
     pub fn with_alpha(mut self, alpha: f32) -> Self {
         self.alpha = alpha;
         self
     }
 
-    /// 初期 `beta` を設定する ( builder)．
+    /// Sets the initial `beta` (builder).
     #[must_use]
     pub fn with_beta(mut self, beta: f32) -> Self {
         self.beta = beta;
         self
     }
 
-    /// `beta` の増分を設定する ( builder)．
+    /// Sets the per-sample increment for `beta` (builder).
     #[must_use]
     pub fn with_beta_increment(mut self, increment: f32) -> Self {
         self.beta_increment = increment;
         self
     }
 
-    /// `epsilon` (priority floor) を設定する ( builder)．
+    /// Sets `epsilon` (priority floor) (builder).
     #[must_use]
     pub fn with_epsilon(mut self, eps: f32) -> Self {
         self.epsilon = eps;
         self
     }
 
-    /// 現在の `beta`．
+    /// Returns the current `beta`.
     #[inline]
     #[must_use]
     pub fn beta(&self) -> f32 {
         self.beta
     }
 
-    /// 現在の `alpha`．
+    /// Returns the current `alpha`.
     #[inline]
     #[must_use]
     pub fn alpha(&self) -> f32 {
         self.alpha
     }
 
-    /// 現在記録されている最大 priority．
+    /// Returns the highest priority observed so far.
     #[inline]
     #[must_use]
     pub fn max_priority(&self) -> f32 {

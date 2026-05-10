@@ -1,41 +1,41 @@
-//! キーイベント → [`Action`] のマッピング．`crossterm` から独立にテストできる．
+//! Key event to [`Action`] mapping. Independently testable from `crossterm`.
 
 use crossterm::event::KeyCode;
 
-/// アプリケーション側に渡るアクション．
+/// Action passed to the application layer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
-    /// カーソルを上に移動 ( Play モード)．
+    /// Move the cursor up (Play mode).
     Up,
-    /// カーソルを下に移動 ( Play モード)．
+    /// Move the cursor down (Play mode).
     Down,
-    /// カーソルを左に移動 ( Play モード)．
+    /// Move the cursor left (Play mode).
     Left,
-    /// カーソルを右に移動 ( Play モード)．
+    /// Move the cursor right (Play mode).
     Right,
-    /// 着手 ( Play モード)．
+    /// Place a stone (Play mode).
     Place,
-    /// パス ( Play モード)．
+    /// Pass (Play mode).
     Pass,
-    /// 1 手進める ( Replay モード)．
+    /// Step one move forward (Replay mode).
     StepForward,
-    /// 1 手戻る ( Replay モード)．
+    /// Step one move backward (Replay mode).
     StepBackward,
-    /// 最初に戻る ( Replay モード)．
+    /// Jump to the beginning (Replay mode).
     JumpStart,
-    /// 最後に飛ぶ ( Replay モード)．
+    /// Jump to the end (Replay mode).
     JumpEnd,
-    /// 自動再生を切替 ( Replay モード)．
+    /// Toggle auto-play (Replay mode).
     ToggleAutoPlay,
-    /// 自動再生間隔を増やす ( Observe モード)．
+    /// Increase the auto-play interval (Observe mode).
     IncreaseDelay,
-    /// 自動再生間隔を減らす ( Observe モード)．
+    /// Decrease the auto-play interval (Observe mode).
     DecreaseDelay,
-    /// 終了．
+    /// Quit.
     Quit,
 }
 
-/// Play モード用のキー → Action 変換．
+/// Key to action mapping for Play mode.
 #[must_use]
 pub fn map_play_key(code: KeyCode) -> Option<Action> {
     match code {
@@ -50,7 +50,7 @@ pub fn map_play_key(code: KeyCode) -> Option<Action> {
     }
 }
 
-/// Replay モード用のキー → Action 変換．
+/// Key to action mapping for Replay mode.
 #[must_use]
 pub fn map_replay_key(code: KeyCode) -> Option<Action> {
     match code {
@@ -66,7 +66,7 @@ pub fn map_replay_key(code: KeyCode) -> Option<Action> {
     }
 }
 
-/// Observe モード用のキー → Action 変換．
+/// Key to action mapping for Observe mode.
 #[must_use]
 pub fn map_observe_key(code: KeyCode) -> Option<Action> {
     match code {

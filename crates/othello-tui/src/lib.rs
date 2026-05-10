@@ -1,15 +1,18 @@
 //! # othello-tui
 //!
-//! Othello シミュレータの TUI ( ratatui) 実装．以下のモードを提供する．
+//! TUI (ratatui) frontend for the Othello simulator. The crate provides three
+//! modes:
 //!
-//! - **Play** — 2 人対戦 ( Human vs Human)．カーソルを動かして石を置く．
-//! - **Replay** — 棋譜の前後再生．`step_forward` / `step_backward` / `jump_to`．
-//! - **Observe** — AI 同士の対戦を観戦する．
+//! - **Play** — two-player match (Human vs Human). Move the cursor to place a stone.
+//! - **Replay** — step a game record forward and backward via `step_forward` /
+//!   `step_backward` / `jump_to`.
+//! - **Observe** — watch an AI vs AI match.
 //!
-//! ## ライブラリ API
+//! ## Library API
 //!
-//! [`run_play`] / [`run_replay`] / [`run_observe`] は端末にアタッチしてイベントループを実行する．
-//! 内部状態 [`AppState`] は描画ロジックから分離されており，テスト容易性を確保している．
+//! [`run_play`] / [`run_replay`] / [`run_observe`] attach to the terminal and
+//! drive the event loop. Internal state ([`AppState`]) is decoupled from the
+//! render logic to keep the code easy to test.
 
 pub mod app;
 pub mod input;
@@ -35,9 +38,10 @@ pub use modes::observe::{ObserveBackend, ObserveMode};
 pub use modes::play::PlayMode;
 pub use modes::replay::ReplayMode;
 
-/// Play モードを起動する ( Human vs Human)．
+/// Launch Play mode (Human vs Human).
 ///
-/// 端末に raw mode + alternate screen をセットアップし，イベントループを駆動する．
+/// Enables raw mode plus the alternate screen on the terminal and drives the
+/// event loop.
 pub fn run_play(board_size: BoardSize) -> Result<()> {
     let mut terminal = setup_terminal()?;
     let result = run_play_loop(&mut terminal, board_size);
@@ -45,19 +49,20 @@ pub fn run_play(board_size: BoardSize) -> Result<()> {
     result
 }
 
-/// Replay モードを起動する ( `GameHistory` を再生)．
+/// Launch Replay mode (replay a `GameHistory`).
 ///
-/// 既定では手動進行．自動再生を最初から有効にしたい場合は [`run_replay_with_options`] を使う．
+/// By default the user advances manually. To start with auto-play enabled,
+/// use [`run_replay_with_options`].
 pub fn run_replay(history: GameHistory) -> Result<()> {
     run_replay_with_options(history, ReplayOptions::default())
 }
 
-/// Replay モードの起動オプション．
+/// Options for launching Replay mode.
 #[derive(Debug, Clone, Copy)]
 pub struct ReplayOptions {
-    /// 起動直後から自動再生を開始するか．
+    /// Whether to start auto-play immediately on launch.
     pub auto_play: bool,
-    /// 自動再生時の手間隔 ( ミリ秒)．[50, 5000] にクランプされる．
+    /// Auto-play step interval in milliseconds. Clamped to `[50, 5000]`.
     pub auto_delay_ms: u64,
 }
 
@@ -70,7 +75,7 @@ impl Default for ReplayOptions {
     }
 }
 
-/// オプション付きで Replay モードを起動する．
+/// Launch Replay mode with explicit options.
 pub fn run_replay_with_options(history: GameHistory, options: ReplayOptions) -> Result<()> {
     let mut terminal = setup_terminal()?;
     let result = run_replay_loop(&mut terminal, history, options);
@@ -78,7 +83,7 @@ pub fn run_replay_with_options(history: GameHistory, options: ReplayOptions) -> 
     result
 }
 
-/// `GameRecord` から `GameHistory` を再構築する補助．
+/// Helper that reconstructs a `GameHistory` from a `GameRecord`.
 pub fn record_to_history(record: &othello_io::GameRecord) -> Result<GameHistory> {
     use othello_core::GameState;
     let size = record.metadata.board_size;
@@ -183,25 +188,25 @@ fn run_replay_loop(
     Ok(())
 }
 
-/// Observe モードの起動設定．
+/// Configuration for launching Observe mode.
 pub struct ObserveConfig {
-    /// 盤面サイズ．
+    /// Board size.
     pub board_size: BoardSize,
-    /// 黒プレイヤー仕様．
+    /// Black player spec.
     pub black_spec: PlayerSpec,
-    /// 白プレイヤー仕様．
+    /// White player spec.
     pub white_spec: PlayerSpec,
-    /// 乱数 seed ( 各プレイヤー SPEC の seed と XOR 合成される)．
+    /// Random seed (XOR-mixed with the seed in each player SPEC).
     pub seed: u64,
-    /// 自動再生間隔 ( ms)．`0` なら手動進行のみ．
+    /// Auto-play interval in milliseconds. `0` means manual stepping only.
     pub auto_delay_ms: u64,
 }
 
-/// Observe モードを起動する ( AI 対戦観戦)．
+/// Launch Observe mode (watch an AI vs AI match).
 ///
-/// `Nn` バリアントは本クレートからは構築できない ( Candle 依存を避けるため)．
-/// `Nn` を含む SPEC を扱う場合は `othello-cli` 側で先に Player を構築し，
-/// [`run_observe_with_players`] を呼ぶこと．
+/// The `Nn` variant cannot be built from this crate (to avoid a Candle
+/// dependency). When the SPEC contains `Nn`, build the Player from
+/// `othello-cli` first and call [`run_observe_with_players`].
 pub fn run_observe(config: ObserveConfig) -> Result<()> {
     use othello_core::Color;
     use othello_player::player_spec;
@@ -249,9 +254,9 @@ pub fn run_observe(config: ObserveConfig) -> Result<()> {
     )
 }
 
-/// 既に構築済の `Box<dyn Player>` を渡して Observe モードを起動する．
+/// Launch Observe mode with already-built `Box<dyn Player>` instances.
 ///
-/// `othello-cli` から `Nn` バリアントを扱うために用意したエントリポイント．
+/// This entry point exists so `othello-cli` can handle the `Nn` variant.
 pub fn run_observe_with_players(
     board_size: BoardSize,
     black: Box<dyn othello_player::Player>,

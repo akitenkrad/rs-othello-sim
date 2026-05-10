@@ -1,6 +1,7 @@
-//! ratatui 描画ロジック．`AppState` を入力として `Frame` に描画する．
+//! ratatui rendering logic. Renders an `AppState` into a `Frame`.
 //!
-//! 描画ロジックは状態と分離されており，`TestBackend` ベースのスナップショットテストで検証する．
+//! The rendering logic is decoupled from state and verified by `TestBackend`
+//! based snapshot tests.
 
 use crate::app::{AppMode, AppState};
 use othello_core::{Color, Coord};
@@ -12,7 +13,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
 };
 
-/// 全体描画．
+/// Renders the entire app to the frame.
 pub fn render(frame: &mut Frame, app: &AppState) {
     let area = frame.area();
     let chunks = Layout::default()
@@ -67,7 +68,8 @@ fn render_board(frame: &mut Frame, area: Rect, app: &AppState) {
     frame.render_widget(p, area);
 }
 
-/// 盤面を 1 行ずつ `Line` に変換する．Play モードではカーソルセルを `[ ]` で囲む．
+/// Convert the board into one `Line` per row. In Play mode the cursor cell
+/// is wrapped in `[ ]`.
 pub fn build_board_lines(app: &AppState) -> Vec<Line<'static>> {
     let size = app.state.board.size();
     let mut lines = Vec::with_capacity((size.rows as usize) + 2);

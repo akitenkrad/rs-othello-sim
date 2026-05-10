@@ -1,38 +1,40 @@
-//! WTHOR ( WTB) バイナリ棋譜の読込．設計書 §4.4 準拠．
+//! Reader for WTHOR (`.wtb`) binary game records. Conforms to §4.4 of
+//! the design document.
 //!
-//! ## フォーマット
+//! ## Format
 //!
-//! ヘッダ 16 byte:
+//! Header (16 bytes):
 //!
-//! | offset | size | 内容                          |
-//! |--------|------|-------------------------------|
-//! | 0      | 4    | 作成年月日 ( CC YY MM DD)      |
-//! | 4      | 4    | ゲーム数 (u32 LE)             |
-//! | 8      | 2    | レコード年 (u16 LE)           |
-//! | 10     | 1    | 盤サイズ ( 0 or 8 → 8 として扱う) |
-//! | 11     | 1    | ゲーム種別 ( 0 = Othello)     |
-//! | 12     | 1    | 深さ                          |
-//! | 13     | 1    | reserved                      |
-//! | 14-15  | 2    | 不使用                        |
+//! | offset | size | content                                    |
+//! |--------|------|--------------------------------------------|
+//! | 0      | 4    | Creation date (CC YY MM DD)                |
+//! | 4      | 4    | Number of games (u32 LE)                   |
+//! | 8      | 2    | Record year (u16 LE)                       |
+//! | 10     | 1    | Board size (0 or 8 -> treat as 8)          |
+//! | 11     | 1    | Game kind (0 = Othello)                    |
+//! | 12     | 1    | Depth                                      |
+//! | 13     | 1    | Reserved                                   |
+//! | 14-15  | 2    | Unused                                     |
 //!
-//! 各局 68 byte:
+//! Per-game block (68 bytes):
 //!
-//! | offset | size | 内容                          |
-//! |--------|------|-------------------------------|
-//! | 0-1    | 2    | tournament_label (u16 LE)     |
-//! | 2-3    | 2    | black_player_id (u16 LE)      |
-//! | 4-5    | 2    | white_player_id (u16 LE)      |
-//! | 6      | 1    | real_score ( 黒の最終石数)     |
-//! | 7      | 1    | theoretical_score ( 完全プレイ) |
-//! | 8-67   | 60   | 手順 60 byte                   |
+//! | offset | size | content                                    |
+//! |--------|------|--------------------------------------------|
+//! | 0-1    | 2    | tournament_label (u16 LE)                  |
+//! | 2-3    | 2    | black_player_id (u16 LE)                   |
+//! | 4-5    | 2    | white_player_id (u16 LE)                   |
+//! | 6      | 1    | real_score (final black stone count)       |
+//! | 7      | 1    | theoretical_score (under perfect play)     |
+//! | 8-67   | 60   | 60 bytes of moves                          |
 //!
-//! 各 byte は `(row-1) * 10 + col` の 1-indexed 表現．`0` は手なし ( = 終了)．
+//! Each move byte is `(row-1) * 10 + col` (1-indexed). `0` means "no
+//! move" (end of game).
 //!
-//! ## Pass の自動挿入
+//! ## Pass auto-insertion
 //!
-//! WTHOR には Pass の明示的な記録がない．Reader 側はゲームを再生し，
-//! 現サイドに合法手が無い局面が来たら `Move::Pass` を MoveEntry に追加してから
-//! 元データの次の手を解釈する．
+//! WTHOR does not record passes explicitly. The reader replays the
+//! game; whenever the side to move has no legal move, it inserts a
+//! `Move::Pass` MoveEntry before interpreting the next byte.
 
 use crate::error::IoError;
 use crate::record::{
@@ -43,19 +45,20 @@ use chrono::{DateTime, FixedOffset, TimeZone};
 use othello_core::{BoardSize, Color, Coord, GameState, Move};
 use std::io::Read;
 
-/// WTHOR ヘッダ ( 16 byte)．
+/// WTHOR header (16 bytes).
 #[derive(Debug, Clone, Copy)]
 pub struct WthorHeader {
-    /// ゲーム数 ( ヘッダの宣言値．実ファイルが短い場合は実際に読めた件数で打ち切る)．
+    /// Declared number of games (truncated to the number actually read
+    /// when the file is shorter than declared).
     pub n_games: u32,
-    /// レコード年 ( 4 桁，例 2023)．
+    /// Record year (4-digit, e.g. 2023).
     pub year: u16,
-    /// 盤サイズ ( 通常 8)．
+    /// Board size (typically 8).
     pub board_size: u8,
 }
 
 impl WthorHeader {
-    /// 16 byte のヘッダバイト列を解析する．
+    /// Parses 16 bytes of header data.
     pub fn parse(buf: &[u8; 16]) -> Result<Self, IoError> {
         let n_games = u32::from_le_bytes([buf[4], buf[5], buf[6], buf[7]]);
         let year = u16::from_le_bytes([buf[8], buf[9]]);
@@ -80,7 +83,7 @@ impl WthorHeader {
     }
 }
 
-/// 1 局分の生メタ ( 68 byte 中の 8 byte)．
+/// Per-game raw metadata (8 of the 68 bytes).
 #[derive(Debug, Clone, Copy)]
 struct GameMeta {
     tournament_label: u16,
@@ -91,7 +94,7 @@ struct GameMeta {
     theoretical_score: u8,
 }
 
-/// WTHOR Reader．`Read` から逐次的に局を読み出す．
+/// WTHOR reader. Reads game records one by one from a `Read`.
 #[derive(Debug)]
 pub struct WthorReader<R: Read> {
     inner: R,
@@ -99,7 +102,7 @@ pub struct WthorReader<R: Read> {
 }
 
 impl<R: Read> WthorReader<R> {
-    /// ヘッダ ( 16 byte) を読み，[`WthorReader`] を構築する．
+    /// Reads the 16-byte header and constructs a [`WthorReader`].
     pub fn new(mut reader: R) -> Result<Self, IoError> {
         let mut buf = [0u8; 16];
         reader.read_exact(&mut buf)?;
@@ -110,13 +113,13 @@ impl<R: Read> WthorReader<R> {
         })
     }
 
-    /// ヘッダ参照．
+    /// Returns a reference to the header.
     #[must_use]
     pub fn header(&self) -> &WthorHeader {
         &self.header
     }
 
-    /// すべての局を読み込み，[`GameRecord`] のベクタを返す．
+    /// Reads all game records and returns them as a `Vec<GameRecord>`.
     pub fn read_all(&mut self) -> Result<Vec<GameRecord>, IoError> {
         let mut records = Vec::with_capacity(self.header.n_games as usize);
         let mut idx: u32 = 0;
@@ -138,7 +141,8 @@ impl<R: Read> WthorReader<R> {
     }
 }
 
-/// 1 byte の WTHOR move コードを `(row, col)` 0-indexed に変換する．`0` は手なし．
+/// Converts a single-byte WTHOR move code into 0-indexed `(row, col)`.
+/// `0` indicates no move.
 fn decode_move_byte(byte: u8) -> Option<(u8, u8)> {
     if byte == 0 {
         return None;
@@ -151,7 +155,7 @@ fn decode_move_byte(byte: u8) -> Option<(u8, u8)> {
     Some((row_1 - 1, col_1 - 1))
 }
 
-/// 68 byte ブロックを `GameRecord` に変換する．
+/// Converts a 68-byte block into a `GameRecord`.
 fn decode_block(
     block: &[u8; 68],
     game_index: u32,
@@ -281,7 +285,8 @@ fn decode_block(
     })
 }
 
-/// WTHOR の年情報のみから RFC3339 タイムスタンプ ( YYYY-01-01T00:00:00 +00:00) を作る．
+/// Builds an RFC3339 timestamp (`YYYY-01-01T00:00:00 +00:00`) from the
+/// WTHOR year alone.
 fn wthor_year_to_ts(year: u16) -> DateTime<FixedOffset> {
     let offset = FixedOffset::east_opt(0).unwrap();
     offset
@@ -294,7 +299,7 @@ fn wthor_year_to_ts(year: u16) -> DateTime<FixedOffset> {
 mod tests {
     use super::*;
 
-    /// 8x8 用の最小限ヘッダを作る ( n_games=1)．
+    /// Builds a minimal 8x8 header (`n_games = 1`).
     fn make_header(n_games: u32, year: u16) -> [u8; 16] {
         let mut h = [0u8; 16];
         // bytes 0-3: date (anything)
@@ -313,7 +318,8 @@ mod tests {
         h
     }
 
-    /// `(row, col)` (0-indexed) を WTHOR move コードに変換 ( テスト用補助)．
+    /// Converts 0-indexed `(row, col)` into a WTHOR move code (test
+    /// helper).
     fn encode_move_byte(row: u8, col: u8) -> u8 {
         (row + 1) * 10 + (col + 1)
     }

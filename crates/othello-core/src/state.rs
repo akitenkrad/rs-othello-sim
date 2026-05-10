@@ -1,32 +1,33 @@
-//! ゲーム状態 [`GameState`] と終局結果 [`GameResult`]．
+//! [`GameState`] (game state) and [`GameResult`] (terminal result).
 
 use crate::board::{Board, BoardSize};
 use crate::color::Color;
 use crate::error::OthelloError;
 use crate::mv::Move;
 
-/// 1 局のゲーム状態．
+/// State of a single game.
 ///
-/// `consecutive_passes` が 2 になると終局．盤面満杯でも終局．
+/// The game is terminal when `consecutive_passes` reaches 2, or when the
+/// board is full.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameState {
-    /// 盤面．
+    /// The board.
     pub board: Board,
-    /// 次に着手するプレイヤー色．
+    /// Side to move next.
     pub side_to_move: Color,
-    /// 累計手数 ( 0 起点)．`apply_move` のたびに 1 増える．
+    /// Cumulative move number (0-based). Incremented on every `apply_move`.
     pub move_number: u32,
-    /// 直前の着手 ( ゲーム開始直後は `None`)．
+    /// The most recent move (`None` immediately after game start).
     pub last_move: Option<Move>,
-    /// 連続したパスの回数 ( 2 で終局判定)．
+    /// Number of consecutive passes (the game is terminal at 2).
     pub consecutive_passes: u8,
 }
 
 impl GameState {
-    /// 標準的な初期状態 ( 標準初期配置 + 黒の手番)．
+    /// Standard initial state (standard initial position with black to move).
     ///
-    /// `BoardSize::STANDARD` ( 8×8) なら必ず成功．他のサイズは
-    /// rows / cols が 4..=26 の偶数である必要がある．
+    /// Always succeeds for `BoardSize::STANDARD` (8x8). For other sizes,
+    /// `rows` and `cols` must each be even integers in `4..=26`.
     pub fn standard(size: BoardSize) -> Result<Self, OthelloError> {
         let board = Board::standard(size)?;
         Ok(Self {
@@ -38,7 +39,7 @@ impl GameState {
         })
     }
 
-    /// 標準 8×8 初期状態の shorthand．
+    /// Shorthand for the standard 8x8 initial state.
     #[must_use]
     pub fn standard_8x8() -> Self {
         Self {
@@ -50,32 +51,37 @@ impl GameState {
         }
     }
 
-    /// 終局かどうか．
+    /// Whether the game has ended.
     ///
-    /// 連続パス 2 回 **または** 盤面満杯 ( 両者合法手なし) で終局．
+    /// The game is terminal when there have been two consecutive passes
+    /// **or** the board is full (neither side has a legal move).
     #[must_use]
     pub fn is_terminal(&self) -> bool {
         self.consecutive_passes >= 2 || self.board.is_terminal()
     }
 
-    /// 現手番の合法手リスト．
+    /// Legal moves for the current side to move.
     #[must_use]
     pub fn legal_moves(&self) -> Vec<Move> {
         self.board.legal_moves(self.side_to_move)
     }
 
-    /// 現手番が Pass しか取れない局面かどうか ( 合法手 0 件かつ相手は合法手あり)．
+    /// Whether the current side must pass (no legal move for `side_to_move`
+    /// while the opponent has at least one).
     #[must_use]
     pub fn must_pass(&self) -> bool {
         !self.board.has_any_legal_move(self.side_to_move)
             && self.board.has_any_legal_move(self.side_to_move.opponent())
     }
 
-    /// 現手番として 1 手指す．
+    /// Plays one move for the current side.
     ///
-    /// - 着手成功時，`side_to_move` は相手に移り，`move_number` は +1，`last_move` 更新
-    /// - Pass 時は `consecutive_passes` を +1，それ以外は 0 にリセット
-    /// - 不正手は [`OthelloError`] を返し，state は変更しない
+    /// - On success, `side_to_move` switches to the opponent, `move_number`
+    ///   is incremented, and `last_move` is updated.
+    /// - For `Pass`, `consecutive_passes` is incremented; otherwise it is
+    ///   reset to 0.
+    /// - On illegal moves, returns [`OthelloError`] and leaves the state
+    ///   unchanged.
     pub fn apply_move(&mut self, mv: Move) -> Result<Vec<crate::Coord>, OthelloError> {
         let flips = self.board.apply(self.side_to_move, mv)?;
         match mv {
@@ -92,7 +98,7 @@ impl GameState {
         Ok(flips)
     }
 
-    /// 終局結果を計算する．終局でない場合は `None`．
+    /// Computes the terminal result. Returns `None` if not terminal.
     #[must_use]
     pub fn result(&self) -> Option<GameResult> {
         if !self.is_terminal() {
@@ -114,28 +120,29 @@ impl GameState {
     }
 }
 
-/// 終局結果．
+/// Terminal result of a game.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GameResult {
-    /// 勝者．同数なら `None` ( 引き分け)．
+    /// Winner of the game. `None` for a draw (equal stone counts).
     pub winner: Option<Color>,
-    /// 黒石数．
+    /// Black stone count.
     pub black: u32,
-    /// 白石数．
+    /// White stone count.
     pub white: u32,
-    /// 総手数 ( パス含む)．
+    /// Total number of moves (including passes).
     pub total_moves: u32,
 }
 
 impl GameResult {
-    /// 引き分けかどうか．
+    /// Whether the game is a draw.
     #[inline]
     #[must_use]
     pub const fn is_draw(&self) -> bool {
         self.winner.is_none()
     }
 
-    /// 勝者から見た得点差 ( 勝者石数 - 敗者石数)．引き分けなら 0．
+    /// Score margin from the winner's perspective (winner_stones -
+    /// loser_stones). Returns 0 for a draw.
     #[inline]
     #[must_use]
     pub const fn margin(&self) -> i32 {

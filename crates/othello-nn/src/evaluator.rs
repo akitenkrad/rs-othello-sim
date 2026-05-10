@@ -1,14 +1,17 @@
-//! [`NnEvaluator`]: NN モデルを Player + Evaluator として駆動するアダプタ．
+//! [`NnEvaluator`]: adapter that drives an NN model as both a Player
+//! and an Evaluator.
 //!
-//! - `select_move` で 1 手を選び，policy を内部に保持する
-//! - `evaluate` ([`othello_player::Evaluator`]) は直前の policy を返す
+//! - `select_move` chooses one move and stashes the policy internally.
+//! - `evaluate` ([`othello_player::Evaluator`]) returns the most recent
+//!   policy.
 //!
-//! 行動選択の手順:
-//! 1. `state` を `(1, 3, H, W)` テンソルに変換
-//! 2. `model.forward` で policy logits + value を取得
-//! 3. softmax → 合法手以外マスク → 再正規化
-//! 4. deterministic なら argmax，そうでなければ温度付きサンプリング
-//! 5. 直前の policy ( 各合法手 → 確率) を `last_policy` に保存
+//! Move selection steps:
+//! 1. Convert `state` into a `(1, 3, H, W)` tensor.
+//! 2. Call `model.forward` to obtain policy logits and value.
+//! 3. softmax -> mask out illegal moves -> renormalize.
+//! 4. argmax when `deterministic`, otherwise sample with temperature.
+//! 5. Store the most recent policy (per legal move -> probability) in
+//!    `last_policy`.
 
 use crate::error::NnError;
 use crate::input::state_to_tensor;
@@ -21,10 +24,12 @@ use rand::seq::SliceRandom;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashMap;
 
-/// NN policy/value を行動選択器として用いる Player．
+/// Player that uses NN policy/value output as a move-selection
+/// strategy.
 ///
-/// 一般的な AlphaZero 系プレイヤーと異なり MCTS は走らせない ( **policy を直接サンプル**)．
-/// MCTS との組み合わせは将来 Phase 7 以降で `MctsPlayer` の prior に NN を使う形で対応する．
+/// Unlike standard AlphaZero-style players, no MCTS is run here — the
+/// policy is **sampled directly**. MCTS integration (e.g. using the NN
+/// as a prior in `MctsPlayer`) is planned for Phase 7 and beyond.
 pub struct NnEvaluator<M: NnModel> {
     model: M,
     color: Color,
@@ -37,7 +42,8 @@ pub struct NnEvaluator<M: NnModel> {
 }
 
 impl<M: NnModel> NnEvaluator<M> {
-    /// 既定値で生成する: temperature = 1.0, deterministic = false, seed = OS 乱数．
+    /// Constructs an evaluator with defaults: `temperature = 1.0`,
+    /// `deterministic = false`, `seed` from OS randomness.
     pub fn new(color: Color, model: M) -> Self {
         Self {
             model,
@@ -51,21 +57,22 @@ impl<M: NnModel> NnEvaluator<M> {
         }
     }
 
-    /// 温度を上書き ( ビルダー)．`t > 0`．小さいほど policy のピークが鋭くなる．
+    /// Builder: overrides the temperature. Requires `t > 0`. Lower
+    /// values sharpen the policy peak.
     #[must_use]
     pub fn with_temperature(mut self, t: f32) -> Self {
         self.temperature = t.max(1e-6);
         self
     }
 
-    /// argmax 選択モードに切り替える ( 完全 deterministic)．
+    /// Switches to argmax selection (fully deterministic).
     #[must_use]
     pub fn deterministic(mut self) -> Self {
         self.deterministic = true;
         self
     }
 
-    /// 乱数 seed を指定する ( 再現性)．
+    /// Builder: sets the random seed for reproducibility.
     #[must_use]
     pub fn with_seed(mut self, seed: u64) -> Self {
         self.rng = ChaCha8Rng::seed_from_u64(seed);
@@ -73,7 +80,7 @@ impl<M: NnModel> NnEvaluator<M> {
         self
     }
 
-    /// 表示名を上書きする．
+    /// Builder: overrides the display name.
     #[must_use]
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = name.into();
@@ -82,7 +89,8 @@ impl<M: NnModel> NnEvaluator<M> {
 }
 
 impl<M: NnModel> NnEvaluator<M> {
-    /// 内部処理: forward + 合法手マスク + 確率分布構築．
+    /// Internal helper: forward pass + legal-move masking + probability
+    /// distribution construction.
     fn compute_policy(&self, state: &GameState) -> Result<HashMap<Move, f32>, NnError> {
         let device = self.model.device().clone();
         let input = state_to_tensor(state, self.color, &device)?;

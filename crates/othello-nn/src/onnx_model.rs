@@ -1,18 +1,21 @@
-//! ONNX 経由で学習済モデルをロードして推論する [`OnnxModel`]．
+//! [`OnnxModel`]: load a trained model via ONNX and run inference.
 //!
-//! `candle-onnx` が提供する `simple_eval` 関数を用いて推論する．モデルの入出力名は
-//! [`OnnxModel::with_io_names`] で上書き可能 ( デフォルトは `input` / `policy` / `value`)．
+//! Inference uses the `simple_eval` function from `candle-onnx`. The
+//! input/output tensor names can be overridden via
+//! [`OnnxModel::with_io_names`] (defaults: `input` / `policy` /
+//! `value`).
 //!
-//! ## 期待する I/O スキーマ
+//! ## Expected I/O schema
 //!
-//! - 入力 ( 1 つ)
-//!   - 名前: `input` ( デフォルト)
-//!   - shape: `(B, 3, H, W)`
-//! - 出力 ( 2 つ)
-//!   - `policy`: `(B, H*W + 1)` の policy logits ( softmax 適用前)
-//!   - `value`: `(B,)` または `(B, 1)` の value scalar ( tanh 適用済)
+//! - One input
+//!   - Name: `input` (default).
+//!   - Shape: `(B, 3, H, W)`.
+//! - Two outputs
+//!   - `policy`: `(B, H*W + 1)` policy logits (before softmax).
+//!   - `value`: `(B,)` or `(B, 1)` value scalar (already tanh-applied).
 //!
-//! AlphaZero 系の export は出力名が `policy` / `value` で慣習化されている．
+//! AlphaZero-style exports conventionally use `policy` / `value` as
+//! the output names.
 
 use crate::error::NnError;
 use crate::model::NnModel;
@@ -22,7 +25,7 @@ use othello_core::BoardSize;
 use std::collections::HashMap;
 use std::path::Path;
 
-/// ONNX 形式のモデル．
+/// ONNX-format model.
 pub struct OnnxModel {
     proto: ModelProto,
     board_size: BoardSize,
@@ -33,12 +36,14 @@ pub struct OnnxModel {
 }
 
 impl OnnxModel {
-    /// ONNX ファイルを読み込む．デフォルト I/O 名 ( `input` / `policy` / `value`) を使用する．
+    /// Loads an ONNX file using the default I/O names (`input` /
+    /// `policy` / `value`).
     pub fn from_path<P: AsRef<Path>>(path: P, board_size: BoardSize) -> Result<Self, NnError> {
         Self::from_path_with_io(path, board_size, "input", "policy", "value")
     }
 
-    /// I/O 名を明示する読込．カスタム export 名のモデルを読む際に使う．
+    /// Loads an ONNX file with explicit I/O names. Use this when the
+    /// model was exported with custom names.
     pub fn from_path_with_io<P: AsRef<Path>>(
         path: P,
         board_size: BoardSize,
@@ -64,7 +69,7 @@ impl OnnxModel {
         })
     }
 
-    /// I/O 名を後から差し替える．
+    /// Replaces the I/O names after construction.
     #[must_use]
     pub fn with_io_names(mut self, input: &str, policy: &str, value: &str) -> Self {
         self.input_name = input.to_string();

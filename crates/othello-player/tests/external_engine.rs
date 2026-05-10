@@ -1,7 +1,8 @@
-//! 外部エンジンプレイヤーの通信レベル統合テスト．
+//! Communication-level integration tests for the external-engine player.
 //!
-//! 実機 Edax / Egaroucid バイナリがない CI でも動くよう，bash スクリプトの
-//! モックエンジンと往復通信する．Unix 限定 ( bash 必須)．
+//! To run on CI machines without real Edax / Egaroucid binaries, the
+//! tests round-trip with a bash-script mock engine. Unix-only (requires
+//! bash).
 
 #![cfg(unix)]
 

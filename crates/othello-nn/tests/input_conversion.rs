@@ -1,4 +1,4 @@
-//! [`state_to_tensor`] のスキーマ整合性テスト．
+//! Schema-consistency tests for [`state_to_tensor`].
 
 use candle_core::Device;
 use othello_core::{BoardSize, Color, Coord, GameState, Move};

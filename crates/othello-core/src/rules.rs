@@ -1,13 +1,15 @@
-//! 任意サイズ盤面用の合法手生成・石返しロジック．
+//! Legal-move generation and stone-flipping logic for arbitrary-sized boards.
 //!
-//! [`GenericBoard`](crate::generic_board::GenericBoard) はこのモジュールの関数を呼び出して
-//! 合法手・石返しを計算する．8 方向それぞれについて，置いたマスから方向に向かって
-//! 相手石が連続している間進み，自石にぶつかったら間の石をすべて反転リストに含める．
+//! [`GenericBoard`](crate::generic_board::GenericBoard) calls the functions
+//! in this module to compute legal moves and flips. For each of the eight
+//! directions, walk from the placed cell while opponent stones continue,
+//! and once a stone of `side` is hit, include all opponent stones along
+//! the line in the flip list.
 
 use crate::color::Color;
 use crate::coord::Coord;
 
-/// 8 方向のオフセット ( drow, dcol)．
+/// Eight directional offsets (drow, dcol).
 pub const DIRECTIONS: [(i8, i8); 8] = [
     (-1, 0),  // N
     (1, 0),   // S
@@ -19,18 +21,21 @@ pub const DIRECTIONS: [(i8, i8); 8] = [
     (1, -1),  // SW
 ];
 
-/// `( row, col)` が盤面内かどうか確認するヘルパ．
+/// Returns whether `(row, col)` is inside the board.
 #[inline]
 pub fn in_bounds(row: i32, col: i32, rows: u8, cols: u8) -> bool {
     row >= 0 && row < rows as i32 && col >= 0 && col < cols as i32
 }
 
-/// 指定座標に `side` を置いた場合に反転する相手石の座標を全て返す．
+/// Returns every opponent-stone coordinate that would flip if `side` plays
+/// at `target`.
 ///
-/// `cell_at` は `(row, col)` を受け取って `Option<Color>` を返すクロージャ．
-/// 返り値は全 8 方向で反転する相手石の座標のリスト．
+/// `cell_at` is a closure that takes `(row, col)` and returns
+/// `Option<Color>`. The return value collects all flipped opponent stones
+/// across the eight directions.
 ///
-/// 反転 0 マスなら空 `Vec` を返す ( = 不正手)．
+/// Returns an empty `Vec` when the move flips no stones (i.e. it is
+/// illegal).
 pub fn flips_for_move<F>(side: Color, target: Coord, rows: u8, cols: u8, cell_at: F) -> Vec<Coord>
 where
     F: Fn(u8, u8) -> Option<Color>,
@@ -72,7 +77,7 @@ where
     all_flips
 }
 
-/// 指定色の合法手座標を全て列挙する．
+/// Enumerates all legal-move coordinates for the given side.
 pub fn legal_move_coords<F>(side: Color, rows: u8, cols: u8, cell_at: F) -> Vec<Coord>
 where
     F: Fn(u8, u8) -> Option<Color>,
@@ -92,7 +97,7 @@ where
     out
 }
 
-/// 反転が 1 つでもあれば `true` ( 早期 return で高速化)．
+/// Returns `true` as soon as at least one flip is found (fast early return).
 fn has_any_flip<F>(side: Color, target: Coord, rows: u8, cols: u8, cell_at: &F) -> bool
 where
     F: Fn(u8, u8) -> Option<Color>,

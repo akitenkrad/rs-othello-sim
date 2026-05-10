@@ -1,55 +1,56 @@
-//! [`OthelloError`]: ライブラリ全体の Result 型で使われるエラー型．
+//! [`OthelloError`]: error type used by the library-wide `Result`.
 
 use crate::coord::Coord;
 use thiserror::Error;
 
-/// `othello-core` で発生するエラー型．
+/// Error type produced by `othello-core`.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum OthelloError {
-    /// サポート外の盤面サイズが指定された．
+    /// An unsupported board size was requested.
     ///
-    /// 許容範囲は $4 \times 4$ から $26 \times 26$ まで．
+    /// Allowed range is from $4 \times 4$ to $26 \times 26$.
     #[error("invalid board size: rows={rows}, cols={cols} (allowed: 4..=26 for both dimensions)")]
     InvalidBoardSize {
-        /// 行数．
+        /// Number of rows.
         rows: u8,
-        /// 列数．
+        /// Number of columns.
         cols: u8,
     },
 
-    /// 座標が盤面外を指している．
+    /// A coordinate falls outside the board.
     #[error("coordinate out of bounds: ({row}, {col}) on {rows}x{cols} board")]
     OutOfBounds {
-        /// 行．
+        /// Row.
         row: u8,
-        /// 列．
+        /// Column.
         col: u8,
-        /// 盤面行数．
+        /// Board rows.
         rows: u8,
-        /// 盤面列数．
+        /// Board columns.
         cols: u8,
     },
 
-    /// 不正な手 ( 既に石がある，1 つも反転しない，合法手があるのに Pass したなど)．
+    /// Illegal move (cell already occupied, no flipped stones, pass requested
+    /// while legal moves exist, etc.).
     #[error("illegal move at ({}, {}): {reason}", coord.row, coord.col)]
     IllegalMove {
-        /// 不正手の座標．
+        /// Coordinate of the illegal move.
         coord: Coord,
-        /// 不正の理由．
+        /// Reason the move is illegal.
         reason: IllegalMoveReason,
     },
 
-    /// 合法手があるのに `Move::Pass` が指定された．
+    /// `Move::Pass` was requested while legal moves exist.
     #[error("illegal pass: legal moves exist for the side to move")]
     IllegalPass,
 }
 
-/// `IllegalMove` の詳細理由．
+/// Detailed reason for an `IllegalMove`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IllegalMoveReason {
-    /// 既に石が置かれているマス．
+    /// The cell is already occupied.
     Occupied,
-    /// どの方向にも相手石を反転できない．
+    /// The move flips no opponent stones in any direction.
     NoFlips,
 }
 

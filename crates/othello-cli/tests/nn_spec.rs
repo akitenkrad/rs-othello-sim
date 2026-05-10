@@ -1,4 +1,5 @@
-//! `nn:` PlayerSpec パース + CLI からのエラーメッセージ検証 ( Phase 6.4)．
+//! Parsing of the `nn:` PlayerSpec form plus verification of CLI error
+//! messages (Phase 6.4).
 
 use othello_player::{NnBackend, PlayerSpec, parse_player_spec};
 use std::path::PathBuf;
@@ -31,7 +32,8 @@ fn parses_nn_onnx_with_options() {
     }
 }
 
-/// `nn:safetensors:<missing-file>` を CLI に渡すと non-zero exit + エラーメッセージ．
+/// Passing `nn:safetensors:<missing-file>` to the CLI yields a non-zero
+/// exit code and an error message.
 #[test]
 fn cli_simulate_with_missing_safetensors_errors() {
     let bin = env!("CARGO_BIN_EXE_othello-cli");

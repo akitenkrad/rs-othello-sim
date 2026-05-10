@@ -1,7 +1,7 @@
-//! `fetch` サブコマンド: 公開棋譜データセットをダウンロードする．
+//! `fetch` subcommand: download public game-record datasets.
 //!
-//! 現状は WTHOR ( フランスオセロ連盟) のみサポート．
-//! 設計の詳細は `docs/external-data.md` および `docs/cli-usage.md` 参照．
+//! Currently only WTHOR (French Othello Federation) is supported. See
+//! `docs/external-data.md` and `docs/cli-usage.md` for design details.
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Args as ClapArgs, Subcommand};
@@ -11,80 +11,85 @@ use std::io::{self, BufWriter, IsTerminal, Read, Write};
 use std::path::{Path, PathBuf};
 use tracing::{info, warn};
 
-/// 既定の WTHOR URL パターン．`{YEAR}` プレースホルダは 4 桁年に置換される．
+/// Default WTHOR URL pattern. The `{YEAR}` placeholder is substituted with a
+/// 4-digit year.
 ///
-/// ffothello.org のレイアウト変更に追従できなかった場合は，
-/// 環境変数 `OTHELLO_WTHOR_URL_PATTERN` または `--url-pattern` で上書きできる．
+/// If the layout of ffothello.org changes, this can be overridden via the
+/// `OTHELLO_WTHOR_URL_PATTERN` environment variable or the `--url-pattern`
+/// flag.
 pub const DEFAULT_WTHOR_URL_PATTERN: &str = "https://www.ffothello.org/wthor/wth_{YEAR}.zip";
 
-/// WTHOR の URL パターン上書きに使う環境変数名．
+/// Environment variable used to override the WTHOR URL pattern.
 pub const WTHOR_URL_ENV: &str = "OTHELLO_WTHOR_URL_PATTERN";
 
-/// `fetch` サブコマンドの引数 ( 親)．
+/// Top-level arguments for the `fetch` subcommand.
 #[derive(Debug, ClapArgs)]
 pub struct Args {
     #[command(subcommand)]
     pub command: FetchCommand,
 }
 
-/// `fetch` のサブコマンド一覧．
+/// Subcommands of `fetch`.
 #[derive(Debug, Subcommand)]
 pub enum FetchCommand {
-    /// 対応データセットの一覧を表示．
+    /// List the supported datasets.
     List,
-    /// FFO の WTHOR アーカイブをダウンロード．
+    /// Download a WTHOR archive from FFO.
     Wthor(WthorArgs),
 }
 
-/// `fetch wthor` の引数．
+/// Arguments for `fetch wthor`.
 #[derive(Debug, ClapArgs)]
 pub struct WthorArgs {
-    /// 単一年を指定 ( 例 `--year 2023`)．`--years` と排他．
+    /// Fetch a single year (e.g. `--year 2023`). Mutually exclusive with `--years`.
     #[arg(long, conflicts_with = "years")]
     pub year: Option<u32>,
 
-    /// 範囲を指定 ( 例 `--years 2020..2023` ，両端含む)．`--year` と排他．
+    /// Fetch a range, inclusive on both ends (e.g. `--years 2020..2023`).
+    /// Mutually exclusive with `--year`.
     #[arg(long, conflicts_with = "year")]
     pub years: Option<String>,
 
-    /// 展開先ディレクトリ ( デフォルト `data/wthor/`)．
+    /// Destination directory for the extracted files (defaults to `data/wthor/`).
     #[arg(long, default_value = "data/wthor/")]
     pub dest: PathBuf,
 
-    /// 既存ファイルがあっても上書きする．
+    /// Overwrite even if the destination files already exist.
     #[arg(long, default_value_t = false)]
     pub force: bool,
 
-    /// ダウンロードした zip を削除しない．
+    /// Keep the downloaded zip archive instead of deleting it.
     #[arg(long, default_value_t = false)]
     pub keep_archive: bool,
 
-    /// URL テンプレートをカスタムに ( `{YEAR}` プレースホルダ．例 `https://example.com/wth_{YEAR}.zip`)．
-    /// CLI > env (`OTHELLO_WTHOR_URL_PATTERN`) > 既定値，の優先順．
+    /// Custom URL template (must contain the `{YEAR}` placeholder, e.g.
+    /// `https://example.com/wth_{YEAR}.zip`). Precedence: CLI > env
+    /// (`OTHELLO_WTHOR_URL_PATTERN`) > built-in default.
     #[arg(long)]
     pub url_pattern: Option<String>,
 
-    /// 進捗バー抑制 ( パイプ用途)．未指定時は stderr が tty なら表示．
+    /// Suppress the progress bar (useful when piping). Otherwise shown when
+    /// stderr is a TTY.
     #[arg(long, default_value_t = false)]
     pub no_progress: bool,
 }
 
-/// `fetch_wthor_year` 等が共有する設定．
+/// Shared configuration consumed by `fetch_wthor_year` and friends.
 #[derive(Debug, Clone)]
 pub struct FetchOptions {
-    /// `{YEAR}` を含む URL テンプレート．
+    /// URL template containing the `{YEAR}` placeholder.
     pub url_pattern: String,
-    /// 出力先ディレクトリ．
+    /// Destination directory.
     pub dest: PathBuf,
-    /// 既存ファイルを上書きするか．
+    /// Whether to overwrite existing files.
     pub force: bool,
-    /// zip を保持するか．
+    /// Whether to keep the downloaded zip.
     pub keep_archive: bool,
-    /// 進捗バーを表示するか．
+    /// Whether to display a progress bar.
     pub show_progress: bool,
 }
 
-/// `fetch` 実行関数．
+/// Entry point for `fetch`.
 pub fn run(args: Args) -> Result<()> {
     match args.command {
         FetchCommand::List => print_list(&mut io::stdout().lock()),
@@ -92,7 +97,7 @@ pub fn run(args: Args) -> Result<()> {
     }
 }
 
-/// `fetch list` 用の出力．
+/// Output helper used by `fetch list`.
 pub fn print_list<W: Write>(out: &mut W) -> Result<()> {
     writeln!(out, "Supported datasets:")?;
     writeln!(out)?;
@@ -114,7 +119,7 @@ pub fn print_list<W: Write>(out: &mut W) -> Result<()> {
     Ok(())
 }
 
-/// `fetch wthor` 実行関数．
+/// Entry point for `fetch wthor`.
 pub fn run_wthor(args: WthorArgs) -> Result<()> {
     let years = resolve_years(args.year, args.years.as_deref())?;
     let url_pattern = resolve_url_pattern(args.url_pattern.as_deref());
@@ -138,7 +143,7 @@ pub fn run_wthor(args: WthorArgs) -> Result<()> {
     Ok(())
 }
 
-/// 1 年分の WTHOR をダウンロード→展開する．
+/// Download and extract a single year of the WTHOR archive.
 pub fn fetch_wthor_year(year: u32, opts: &FetchOptions) -> Result<()> {
     let url = expand_url(&opts.url_pattern, year)?;
     let dest_dir = &opts.dest;
@@ -191,7 +196,7 @@ pub fn fetch_wthor_year(year: u32, opts: &FetchOptions) -> Result<()> {
     Ok(())
 }
 
-/// `--year` / `--years` を解釈し，処理対象年のベクタを返す．
+/// Interpret `--year` / `--years` and return the list of years to process.
 fn resolve_years(year: Option<u32>, years: Option<&str>) -> Result<Vec<u32>> {
     match (year, years) {
         (Some(_), Some(_)) => Err(anyhow!("--year and --years are mutually exclusive")),
@@ -206,7 +211,7 @@ fn resolve_years(year: Option<u32>, years: Option<&str>) -> Result<Vec<u32>> {
     }
 }
 
-/// `"2020..2023"` 形式の文字列を `(2020, 2023)` に解釈する ( 両端含む)．
+/// Parse a string of the form `"2020..2023"` into `(2020, 2023)` (inclusive on both ends).
 pub fn parse_year_range(s: &str) -> Result<(u32, u32)> {
     let parts: Vec<&str> = s.split("..").collect();
     if parts.len() != 2 {
@@ -226,7 +231,7 @@ pub fn parse_year_range(s: &str) -> Result<(u32, u32)> {
     Ok((a, b))
 }
 
-/// CLI > env > default の優先順で URL パターンを解決する．
+/// Resolve the URL pattern using CLI > env > default precedence.
 fn resolve_url_pattern(cli: Option<&str>) -> String {
     if let Some(s) = cli {
         return s.to_string();
@@ -239,7 +244,7 @@ fn resolve_url_pattern(cli: Option<&str>) -> String {
     DEFAULT_WTHOR_URL_PATTERN.to_string()
 }
 
-/// URL パターンに `{YEAR}` プレースホルダが含まれるか検証する．
+/// Verify that the URL pattern contains the `{YEAR}` placeholder.
 fn validate_url_pattern(pattern: &str) -> Result<()> {
     if !pattern.contains("{YEAR}") {
         bail!(
@@ -250,7 +255,7 @@ fn validate_url_pattern(pattern: &str) -> Result<()> {
     Ok(())
 }
 
-/// `{YEAR}` を 4 桁年に置換した URL を返す．
+/// Substitute `{YEAR}` with the 4-digit year and return the URL.
 pub fn expand_url(pattern: &str, year: u32) -> Result<String> {
     if !pattern.contains("{YEAR}") {
         bail!("URL pattern {pattern:?} does not contain the `{{YEAR}}` placeholder");
@@ -258,7 +263,7 @@ pub fn expand_url(pattern: &str, year: u32) -> Result<String> {
     Ok(pattern.replace("{YEAR}", &format!("{year:04}")))
 }
 
-/// HTTP GET でファイルを保存する．content-length が取れた場合は ProgressBar で進捗表示．
+/// HTTP GET to file. If `Content-Length` is available, show a progress bar.
 fn download_with_progress(url: &str, dest: &Path, show_progress: bool) -> Result<u64> {
     let resp = ureq::get(url)
         .call()
@@ -328,7 +333,8 @@ fn download_with_progress(url: &str, dest: &Path, show_progress: bool) -> Result
     Ok(total_read)
 }
 
-/// ureq のエラーを，404 等の構造的失敗とそれ以外で分けてユーザフレンドリーに整形する．
+/// Format a `ureq::Error` into a user-friendly anyhow error, distinguishing
+/// structured failures (e.g. HTTP 404) from transport errors.
 fn classify_ureq_error(url: &str, err: ureq::Error) -> anyhow::Error {
     match err {
         ureq::Error::Status(404, _) => anyhow!(
@@ -344,9 +350,9 @@ fn classify_ureq_error(url: &str, err: ureq::Error) -> anyhow::Error {
     }
 }
 
-/// zip を `dest_dir` 直下に展開する．`.wtb` / `.JOU` / `.TOU` を抽出．
-/// 1 つも `.wtb` が含まれない場合は警告を出して全エントリを展開する．
-/// 戻り値は展開したファイル数．
+/// Extract the zip directly into `dest_dir`, keeping only `.wtb` / `.JOU` /
+/// `.TOU` entries. If no `.wtb` entry is present, a warning is emitted and
+/// every entry is extracted. Returns the number of files extracted.
 fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<usize> {
     let file = File::open(zip_path)
         .with_context(|| format!("failed to open archive: {}", zip_path.display()))?;
@@ -416,7 +422,8 @@ fn extract_zip(zip_path: &Path, dest_dir: &Path) -> Result<usize> {
     Ok(extracted)
 }
 
-/// `.wtb`/`.jou`/`.tou` 拡張子のファイルだけを抽出対象とする ( 大文字小文字は無視)．
+/// Keep only files with the `.wtb` / `.jou` / `.tou` extensions
+/// (case-insensitive).
 fn should_extract(path: &Path) -> bool {
     has_wtb_extension(path) || has_aux_extension(path)
 }

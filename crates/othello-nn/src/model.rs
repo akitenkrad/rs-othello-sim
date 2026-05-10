@@ -1,39 +1,47 @@
-//! NN モデル trait と推論結果型．
+//! NN model trait and inference result type.
 
 use crate::error::NnError;
 use candle_core::{Device, Tensor};
 use othello_core::BoardSize;
 
-/// NN policy/value モデルが満たすべきインターフェース．
+/// Interface that an NN policy/value model must satisfy.
 ///
-/// 実装側は forward 1 回で **policy ヘッド ( logits)** と **value ヘッド ( scalar)** の
-/// 双方を返すことを期待する．実装が分離している場合は呼び出し側で 2 回 forward すること．
+/// Implementations are expected to return **both** the policy head
+/// (logits) and the value head (scalar) in a single forward pass.
+/// Models with separated heads should call forward twice from the
+/// caller side.
 ///
-/// `Send` 境界はバッチ並列実行 ( `othello_engine::BatchRunner`) で利用するため要求する．
+/// The `Send` bound is required so models can be used by the parallel
+/// `othello_engine::BatchRunner`.
 pub trait NnModel: Send {
-    /// 推論を実行する．
+    /// Runs inference.
     ///
-    /// - `input`: shape `(B, 3, H, W)` の `f32` テンソル ( own / opp / legal mask)．
-    /// - 戻り値: `(policy_logits, value)`．
-    ///   - `policy_logits` は `(B, H*W + 1)` ( 末尾は Pass)．
-    ///   - `value` は `(B,)` の tanh 空間 ( 自分視点の勝率推定 $[-1, 1]$)．
+    /// - `input`: `(B, 3, H, W)` `f32` tensor (own / opp / legal mask).
+    /// - Returns `(policy_logits, value)`:
+    ///   - `policy_logits` has shape `(B, H*W + 1)` (the last entry is
+    ///     the Pass logit).
+    ///   - `value` has shape `(B,)` in tanh space (a win-rate estimate
+    ///     from the side to move's perspective in $[-1, 1]$).
     fn forward(&self, input: &Tensor) -> Result<(Tensor, Tensor), NnError>;
 
-    /// 期待入力盤面サイズ．forward 入力の shape チェックに使う．
+    /// Expected input board size. Used to validate the `input` shape.
     fn board_size(&self) -> BoardSize;
 
-    /// 動作デバイス ( CPU / Metal / CUDA)．本タスクでは CPU のみ前提．
+    /// Execution device (CPU / Metal / CUDA). Currently only CPU is
+    /// targeted.
     fn device(&self) -> &Device;
 }
 
-/// 1 局面に対する NN 出力．
+/// NN output for a single position.
 ///
-/// - `policy` は softmax 後の確率分布 ( 合計 1.0)．長さ `H*W + 1` ( 末尾 Pass)．
-/// - `value` は自分視点の勝率推定 $[-1, 1]$ ( 1 が勝ち寄り)．
+/// - `policy`: softmax-normalized probability distribution (sums to
+///   1.0). Length `H*W + 1`; the last entry is Pass.
+/// - `value`: win-rate estimate in tanh space $[-1, 1]$ from the side
+///   to move's perspective (1 is winning).
 #[derive(Debug, Clone)]
 pub struct PolicyValue {
-    /// softmax 適用後の確率ベクトル．
+    /// Probability vector after softmax.
     pub policy: Vec<f32>,
-    /// tanh 空間の value．
+    /// Value in tanh space.
     pub value: f32,
 }

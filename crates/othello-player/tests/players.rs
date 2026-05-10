@@ -1,4 +1,4 @@
-//! 各プレイヤーの動作統合テスト．
+//! Integration tests covering each player implementation.
 
 use othello_core::prelude::*;
 use othello_player::{GreedyPlayer, HumanPlayer, Player, PlayerError, RandomPlayer};

@@ -1,19 +1,21 @@
-//! [`GreedyPlayer`]: 着手後の自分の石数最大化プレイヤー．
+//! [`GreedyPlayer`]: a player that maximizes its own stones after the move.
 
 use crate::traits::{Player, PlayerError};
 use othello_core::{Color, GameState, Move};
 
-/// 着手後の自分の石数を最大化する手を選ぶ greedy プレイヤー．
+/// Greedy player that picks the move maximizing the player's own stone
+/// count after placing.
 ///
-/// 同点時は合法手リスト内の最初の手 ( 行優先 → 列優先で先に出るもの) を選ぶ．
-/// パス以外の合法手がない場合は `Move::Pass` を返す．
+/// Ties are broken by taking the first move in the legal-moves list
+/// (row-major, then column-major). When no non-pass legal move exists,
+/// returns `Move::Pass`.
 pub struct GreedyPlayer {
     name: String,
     color: Color,
 }
 
 impl GreedyPlayer {
-    /// 名前と色を指定して生成する．
+    /// Constructs a player from a name and color.
     #[must_use]
     pub fn new(name: impl Into<String>, color: Color) -> Self {
         Self {
@@ -22,7 +24,7 @@ impl GreedyPlayer {
         }
     }
 
-    /// 標準名 `GreedyPlayer` で生成する．
+    /// Constructs a player with the default name (`"GreedyPlayer"`).
     #[must_use]
     pub fn with_color(color: Color) -> Self {
         Self::new("GreedyPlayer", color)

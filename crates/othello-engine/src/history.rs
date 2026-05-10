@@ -1,8 +1,9 @@
-//! [`GameHistory`]: スナップショット方式で全手の状態を保持する履歴．
+//! [`GameHistory`]: per-move history stored as full snapshots.
 
 use othello_core::{GameState, Move};
 
-/// 1 局分の履歴．**完全スナップショット方式**で，初期状態 + 各手後の状態 ( $n+1$ 個) を保持する．
+/// History of a single game. Uses **full snapshots** — keeps the initial
+/// state plus the state after each move ($n+1$ states in total).
 #[derive(Debug, Clone)]
 pub struct GameHistory {
     snapshots: Vec<GameState>,
@@ -10,7 +11,7 @@ pub struct GameHistory {
 }
 
 impl GameHistory {
-    /// 初期状態のみを持つ空履歴を生成する．
+    /// Builds an empty history that only contains the initial state.
     #[must_use]
     pub fn new(initial: GameState) -> Self {
         Self {
@@ -19,41 +20,42 @@ impl GameHistory {
         }
     }
 
-    /// 着手後の状態を 1 ステップ追加する．
+    /// Appends a single move and the resulting state.
     pub fn push(&mut self, mv: Move, post_state: GameState) {
         self.moves.push(mv);
         self.snapshots.push(post_state);
     }
 
-    /// 初期状態を返す．
+    /// Returns the initial state.
     #[inline]
     #[must_use]
     pub fn initial(&self) -> &GameState {
         &self.snapshots[0]
     }
 
-    /// 全スナップショット ( 長さは手数 + 1)．
+    /// Returns all snapshots (length = number of moves + 1).
     #[inline]
     #[must_use]
     pub fn snapshots(&self) -> &[GameState] {
         &self.snapshots
     }
 
-    /// 着手列 ( 長さは手数)．
+    /// Returns the move sequence (length = number of moves).
     #[inline]
     #[must_use]
     pub fn moves(&self) -> &[Move] {
         &self.moves
     }
 
-    /// 総手数 ( パス含む)．
+    /// Total number of moves (includes passes).
     #[inline]
     #[must_use]
     pub fn total_moves(&self) -> usize {
         self.moves.len()
     }
 
-    /// `index` 手目時点 ( 0 = 初期状態，`n` = `n` 手目適用後) のスナップショットを返す．
+    /// Returns the snapshot at `index` (0 = initial state, `n` = state
+    /// after the `n`-th move).
     #[inline]
     #[must_use]
     pub fn snapshot_at(&self, index: usize) -> Option<&GameState> {

@@ -1,4 +1,4 @@
-//! JSON / GGF のラウンドトリップテスト．
+//! JSON / GGF round-trip tests.
 
 use chrono::{DateTime, FixedOffset};
 use othello_core::{BoardSize, Color, Coord, Move};

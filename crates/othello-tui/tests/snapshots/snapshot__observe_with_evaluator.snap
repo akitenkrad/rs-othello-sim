@@ -1,5 +1,6 @@
 ---
 source: crates/othello-tui/tests/snapshot.rs
+assertion_line: 83
 expression: s
 ---
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -9,7 +10,7 @@ expression: s
 │   a b c d e f g h                    ││Black: 2  White: 2                    │
 │ 1  .  .  .  .  .  .  .  .            ││Side: Black                           │
 │ 2  .  .  .  .  .  .  .  .            ││Last: -                               │
-│ 3  .  .  .  .  .  .  .  .            ││Observe ( Space=step, a=auto,         │
+│ 3  .  .  .  .  .  .  .  .            ││Observe (Space=step, a=auto,          │
 │ 4  .  .  .  O  X  .  .  .            │└──────────────────────────────────────┘
 │ 5  .  .  .  X  O  .  .  .            │┌ Move History ────────────────────────┐
 │ 6  .  .  .  .  .  .  .  .            ││                                      │

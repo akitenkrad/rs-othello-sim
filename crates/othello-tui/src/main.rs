@@ -1,4 +1,4 @@
-//! `othello-tui` バイナリエントリポイント．
+//! `othello-tui` binary entry point.
 //!
 //! ```bash
 //! othello-tui play --board-size 8
@@ -26,35 +26,35 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// 2 人対戦 ( Human vs Human)．
+    /// Two-player match (Human vs Human).
     Play(PlayArgs),
-    /// 棋譜の再生．
+    /// Replay a game record.
     Replay(ReplayArgs),
 }
 
 #[derive(Debug, clap::Args)]
 struct PlayArgs {
-    /// 盤面サイズ ( 4..=26)．
+    /// Board size (4..=26).
     #[arg(long, default_value_t = 8)]
     board_size: u8,
 }
 
 #[derive(Debug, clap::Args)]
 struct ReplayArgs {
-    /// 棋譜ファイル．
+    /// Game-record file.
     #[arg(long)]
     file: PathBuf,
 
-    /// 棋譜フォーマット．
+    /// Game-record format.
     #[arg(long, value_enum, default_value_t = ReplayFormat::Json)]
     format: ReplayFormat,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum ReplayFormat {
-    /// 自前 JSON．
+    /// Native JSON.
     Json,
-    /// GGF．
+    /// GGF.
     Ggf,
 }
 

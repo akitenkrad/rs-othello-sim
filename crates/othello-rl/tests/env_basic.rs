@@ -1,4 +1,4 @@
-//! `OthelloEnv` の統合テスト．
+//! Integration tests for `OthelloEnv`.
 
 use othello_core::{BoardSize, Color};
 use othello_player::RandomPlayer;

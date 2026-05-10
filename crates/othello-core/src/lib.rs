@@ -1,24 +1,25 @@
 //! # othello-core
 //!
-//! Othello (Reversi) のコア型・ルール・盤面表現を提供するクレート．
+//! Core types, rules, and board representations for Othello (Reversi).
 //!
-//! ## 主要型
+//! ## Key types
 //!
-//! - [`Color`] — 黒・白の二値 enum
-//! - [`Coord`] — 行・列を持つ座標
-//! - [`Move`] — `Place(Coord)` または `Pass`
-//! - [`BoardSize`] — 盤面サイズ
-//! - [`Bitboard8`] — 8×8 専用 bitboard 実装
-//! - [`GenericBoard`] — 任意サイズ ( 4×4 〜 26×26) の汎用実装
-//! - [`Board`] — 上記 2 つを切り替えるハイブリッド enum
-//! - [`GameState`] — 盤面 + 手番 + 連続パス回数等
-//! - [`GameResult`] — 勝者と石数の終局結果
-//! - [`OthelloError`] — エラー型
+//! - [`Color`] — Black/White enum.
+//! - [`Coord`] — Row/column coordinate.
+//! - [`Move`] — `Place(Coord)` or `Pass`.
+//! - [`BoardSize`] — Board dimensions.
+//! - [`Bitboard8`] — Bitboard implementation specialized to 8x8.
+//! - [`GenericBoard`] — Generic implementation for arbitrary sizes (4x4 to 26x26).
+//! - [`Board`] — Hybrid enum that switches between the two implementations above.
+//! - [`GameState`] — Board, side-to-move, consecutive pass count, etc.
+//! - [`GameResult`] — Winner and stone counts at the end of the game.
+//! - [`OthelloError`] — Error type.
 //!
-//! ## Bitboard レイアウト
+//! ## Bitboard layout
 //!
-//! `bit_index = row * 8 + col` ( 行 0 列 0 = bit 0，行 7 列 7 = bit 63)．
-//! 8 方向シフトは列マスク ( A 列・H 列) で wrap-around を防ぎつつ実装される．
+//! `bit_index = row * 8 + col` (row 0 col 0 = bit 0, row 7 col 7 = bit 63).
+//! Eight-direction shifts use column masks (column A, column H) to prevent
+//! wrap-around.
 
 pub mod bitboard;
 pub mod board;
@@ -39,7 +40,7 @@ pub use generic_board::GenericBoard;
 pub use mv::Move;
 pub use state::{GameResult, GameState};
 
-/// よく使う型・トレイトを一括で導入するための prelude．
+/// Prelude that imports the commonly used types and traits in one go.
 ///
 /// ```
 /// use othello_core::prelude::*;

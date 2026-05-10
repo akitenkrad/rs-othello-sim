@@ -1,18 +1,23 @@
-//! [`HumanPlayer`]: 標準入力 ( または任意の `Read`) から座標文字列を読み取るプレイヤー．
+//! [`HumanPlayer`]: a player that reads coordinate strings from stdin (or
+//! any `Read`).
 //!
-//! 入力フォーマット:
-//! - 座標: 小文字英字 + 数字 ( 例 `e4`)．列 a-z ( 1-26)，行 1-26．
-//! - パス: `pass` または `Pass` ( 大文字小文字無視)．
-//! - 不正入力時はテスト容易性のため再入力を促さず `PlayerError::InvalidCoord` を返す．
+//! Input format:
+//! - Coordinate: a lowercase letter followed by digits (e.g. `e4`). Column
+//!   `a-z` (1-26); row `1-26`.
+//! - Pass: `pass` or `Pass` (case-insensitive).
+//! - For testability, invalid input does not re-prompt; instead, the
+//!   player returns `PlayerError::InvalidCoord`.
 
 use crate::traits::{Player, PlayerError};
 use othello_core::{Color, Coord, GameState, Move};
 use std::io::{BufRead, BufReader, Read, Write};
 
-/// 標準入力 ( または任意の `Read`) からの対話入力で手を選ぶプレイヤー．
+/// Player that selects moves through interactive input from stdin (or any
+/// `Read`).
 ///
-/// テスト容易性のため `Read` トレイトオブジェクトと `Write` トレイトオブジェクト ( プロンプト出力用) を
-/// 注入可能にしている．デフォルトでは `stdin` / `stderr` を使う．
+/// To make this testable, both the `Read` (input source) and `Write`
+/// (prompt sink) are injected as trait objects. The defaults are `stdin`
+/// and `stderr`.
 pub struct HumanPlayer {
     name: String,
     color: Color,
@@ -21,7 +26,8 @@ pub struct HumanPlayer {
 }
 
 impl HumanPlayer {
-    /// 標準入力からの読み取り + 標準エラー出力へのプロンプトでインスタンス化する．
+    /// Constructs a player that reads from stdin and writes prompts to
+    /// stderr.
     #[must_use]
     pub fn new_stdio(name: impl Into<String>, color: Color) -> Self {
         Self {
@@ -32,7 +38,8 @@ impl HumanPlayer {
         }
     }
 
-    /// 任意の `Read` と `Write` を注入してインスタンス化する ( テスト用)．
+    /// Constructs a player with explicit `Read` and `Write` (useful for
+    /// tests).
     pub fn new_with_io<R, W>(name: impl Into<String>, color: Color, reader: R, writer: W) -> Self
     where
         R: BufRead + Send + 'static,
@@ -46,7 +53,7 @@ impl HumanPlayer {
         }
     }
 
-    /// 任意の `Read` ( `BufRead` でない) を渡したい場合のヘルパ．
+    /// Helper for callers that have a `Read` rather than a `BufRead`.
     pub fn new_from_read<R, W>(name: impl Into<String>, color: Color, reader: R, writer: W) -> Self
     where
         R: Read + Send + 'static,
@@ -56,12 +63,12 @@ impl HumanPlayer {
     }
 }
 
-/// `e4` のような座標文字列をパースする．
+/// Parses a coordinate string such as `e4`.
 ///
-/// - 列: 小文字英字 1 文字 ( a-z) → 0-indexed 列番号
-/// - 行: 1〜2 桁の正整数 ( 1-indexed) → 0-indexed 行番号
+/// - Column: a single lowercase letter (`a-z`) -> 0-indexed column.
+/// - Row: a 1- or 2-digit positive integer (1-indexed) -> 0-indexed row.
 ///
-/// 大文字英字も受理する ( `E4` も OK)．
+/// Uppercase letters are also accepted (`E4` is OK).
 pub fn parse_coord(input: &str) -> Result<Coord, PlayerError> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -169,7 +176,7 @@ fn format_legal_moves(moves: &[Move]) -> String {
     }
 }
 
-/// `Coord` を `"e4"` 形式の文字列に変換する．
+/// Converts a `Coord` into a string of the form `"e4"`.
 #[must_use]
 pub fn format_coord(c: Coord) -> String {
     let col_char = (b'a' + c.col) as char;

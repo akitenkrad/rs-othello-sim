@@ -1,13 +1,13 @@
-//! [`UniformReplayBuffer`]: 一様サンプリングのリングバッファ．
+//! [`UniformReplayBuffer`]: a ring buffer with uniform sampling.
 
 use rand::Rng;
 
 use crate::replay_buffer::transition::{Transition, TransitionBatch};
 use crate::replay_buffer::{ReplayBuffer, ReplayError, stack_transitions};
 
-/// FIFO リング上の一様サンプリング replay buffer．
+/// Uniform-sampling replay buffer over a FIFO ring.
 ///
-/// 容量超過時は最古の要素を上書きする ( ring buffer)．
+/// On capacity overflow the oldest element is overwritten (ring buffer).
 #[derive(Debug)]
 pub struct UniformReplayBuffer {
     capacity: usize,
@@ -17,11 +17,11 @@ pub struct UniformReplayBuffer {
 }
 
 impl UniformReplayBuffer {
-    /// 容量 `capacity` のバッファを作る．
+    /// Creates a buffer with the given `capacity`.
     ///
     /// # Panics
     ///
-    /// `capacity == 0` で panic．
+    /// Panics if `capacity == 0`.
     #[must_use]
     pub fn new(capacity: usize) -> Self {
         assert!(capacity > 0, "ReplayBuffer capacity must be > 0");

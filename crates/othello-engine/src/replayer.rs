@@ -1,11 +1,13 @@
-//! [`Replayer`]: `GameHistory` 上で前後移動・任意手数ジャンプを行う．
+//! [`Replayer`]: forward/backward/jump-to navigation over a `GameHistory`.
 
 use crate::history::GameHistory;
 use othello_core::GameState;
 
-/// 履歴上のカーソル ( = 現在表示している手数 0..=`total_moves`)．
+/// Cursor over the history (the move currently being displayed,
+/// `0..=total_moves`).
 ///
-/// `cursor = 0` は初期状態，`cursor = n` は $n$ 手目適用後を指す．
+/// `cursor = 0` is the initial state; `cursor = n` points to the state
+/// after applying the `n`-th move.
 #[derive(Debug)]
 pub struct Replayer<'a> {
     history: &'a GameHistory,
@@ -13,34 +15,35 @@ pub struct Replayer<'a> {
 }
 
 impl<'a> Replayer<'a> {
-    /// `GameHistory` の参照から新規 Replayer を生成する．カーソルは初期状態 ( 0)．
+    /// Builds a new `Replayer` from a borrowed `GameHistory`. The cursor
+    /// starts at the initial state (`0`).
     #[must_use]
     pub fn new(history: &'a GameHistory) -> Self {
         Self { history, cursor: 0 }
     }
 
-    /// 現在のカーソル位置．
+    /// Returns the current cursor position.
     #[inline]
     #[must_use]
     pub fn cursor(&self) -> usize {
         self.cursor
     }
 
-    /// 履歴中の総手数．
+    /// Total number of moves in the history.
     #[inline]
     #[must_use]
     pub fn total_moves(&self) -> usize {
         self.history.total_moves()
     }
 
-    /// 現在の `GameState`．
+    /// Returns the current `GameState`.
     #[must_use]
     pub fn current(&self) -> &GameState {
         // GameHistory は最低でも初期状態 1 個を持つので unwrap は安全
         self.history.snapshot_at(self.cursor).unwrap()
     }
 
-    /// 1 手進める．既に最後尾なら `None`．
+    /// Steps forward by one move. Returns `None` if already at the end.
     pub fn step_forward(&mut self) -> Option<&GameState> {
         if self.cursor < self.total_moves() {
             self.cursor += 1;
@@ -50,7 +53,8 @@ impl<'a> Replayer<'a> {
         }
     }
 
-    /// 1 手戻す．既に初期状態なら `None`．
+    /// Steps backward by one move. Returns `None` if already at the
+    /// initial state.
     pub fn step_backward(&mut self) -> Option<&GameState> {
         if self.cursor > 0 {
             self.cursor -= 1;
@@ -60,7 +64,8 @@ impl<'a> Replayer<'a> {
         }
     }
 
-    /// 指定手数にジャンプする．`move_number` は 0..=`total_moves` の範囲外なら `None`．
+    /// Jumps to the given move number. Returns `None` if `move_number` is
+    /// outside `0..=total_moves`.
     pub fn jump_to(&mut self, move_number: usize) -> Option<&GameState> {
         if move_number > self.total_moves() {
             return None;

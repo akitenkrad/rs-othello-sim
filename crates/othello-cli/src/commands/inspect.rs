@@ -1,4 +1,4 @@
-//! `inspect` サブコマンド: 棋譜ファイルの統計情報を表示する．
+//! `inspect` subcommand: print summary statistics for a game record.
 
 use anyhow::{Context, Result};
 use clap::{Args as ClapArgs, ValueEnum};
@@ -8,36 +8,36 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-/// `inspect` の引数．
+/// Arguments for `inspect`.
 #[derive(Debug, ClapArgs)]
 pub struct Args {
-    /// 入力ファイル．
+    /// Input file.
     #[arg(long)]
     pub file: PathBuf,
 
-    /// 入力フォーマット．
+    /// Input format.
     #[arg(long, value_enum)]
     pub format: InspectFormat,
 }
 
-/// inspect 入力フォーマット．
+/// Input format for `inspect`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum InspectFormat {
-    /// 自前 JSON．
+    /// Native JSON.
     Json,
-    /// GGF．
+    /// GGF.
     Ggf,
-    /// WTHOR バイナリ．
+    /// WTHOR binary.
     Wthor,
 }
 
-/// `inspect` 実行関数．stdout に summary を書く．
+/// Entry point for `inspect`. Writes the summary to stdout.
 pub fn run(args: Args) -> Result<()> {
     let mut out = std::io::stdout().lock();
     inspect_to_writer(&args, &mut out)
 }
 
-/// 出力先を抽象化したコア．
+/// Core implementation with the output sink abstracted.
 pub fn inspect_to_writer<W: std::io::Write>(args: &Args, out: &mut W) -> Result<()> {
     let path_display = args.file.display().to_string();
     match args.format {

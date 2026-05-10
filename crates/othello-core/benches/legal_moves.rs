@@ -1,9 +1,11 @@
-//! 8×8 合法手生成のベンチマーク．
+//! Benchmarks for legal-move generation on the 8x8 board.
 //!
-//! 設計書 §9 の目標値: $\geq 10^7$ 回/秒 ( Bitboard)．
+//! Target from design doc §9: at least $10^7$ generations per second
+//! (Bitboard).
 //!
-//! ランダムに進めた局面 1000 個を事前生成し，各局面について
-//! 黒/白それぞれの合法手を全列挙するスループットを測る．
+//! Pre-generates 1000 positions reached via random play and measures the
+//! throughput of enumerating Black's and White's legal moves at each
+//! position.
 
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use othello_core::prelude::*;

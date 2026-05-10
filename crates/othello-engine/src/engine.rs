@@ -1,4 +1,4 @@
-//! [`GameEngine`]: 1 局のゲームループ実行．
+//! [`GameEngine`]: drives the game loop for a single game.
 
 use crate::history::GameHistory;
 use chrono::{DateTime, FixedOffset, Local, Offset, Utc};
@@ -12,21 +12,24 @@ use othello_player::{Player, PlayerError};
 use thiserror::Error;
 use tracing::{debug, info, info_span};
 
-/// 着手ごとに呼ばれるロギングコールバックの型．Phase 3 の `tracing` 統合と並存する後方互換 API．
+/// Type of the per-move logging callback. A backwards-compatible API kept
+/// alongside the `tracing` integration introduced in Phase 3.
 pub type LogCallback = Box<dyn FnMut(&str) + Send>;
 
-/// `GameEngine` 設定．
+/// Configuration for [`GameEngine`].
 pub struct EngineConfig {
-    /// 盤面サイズ．
+    /// Board size.
     pub board_size: BoardSize,
-    /// ゲーム ID ( 未指定なら UUID v4 が割り当てられる)．
+    /// Game ID. A UUID v4 is generated automatically if `None`.
     pub game_id: Option<String>,
-    /// 安全装置: この手数を超えたら強制終了する ( デフォルト `None` で無制限)．
+    /// Safety cap: abort once this many moves have been played. `None`
+    /// disables the cap.
     pub max_moves: Option<u32>,
-    /// 着手ごとのコールバック ( ロギング用，後方互換 API)．
+    /// Per-move callback for logging (backwards-compatible API).
     pub log_callback: Option<LogCallback>,
-    /// JSONL ロガー ( Phase 3 で追加)．設定すると `game_start` / `move` / `pass` / `game_end` を
-    /// 設計書 §4.2 のフォーマットで書き出す．
+    /// JSONL logger (added in Phase 3). When set, emits `game_start` /
+    /// `move` / `pass` / `game_end` records in the format specified by the
+    /// design document §4.2.
     pub jsonl_logger: Option<JsonlLogger>,
 }
 
@@ -55,13 +58,13 @@ impl Default for EngineConfig {
 }
 
 impl EngineConfig {
-    /// 標準 8×8 設定．
+    /// Default 8x8 configuration.
     #[must_use]
     pub fn standard() -> Self {
         Self::default()
     }
 
-    /// 盤面サイズを指定して設定を作る．
+    /// Builds a config with an explicit board size.
     #[must_use]
     pub fn with_size(size: BoardSize) -> Self {
         Self {
@@ -71,38 +74,38 @@ impl EngineConfig {
     }
 }
 
-/// `GameEngine` が返すエラー．
+/// Errors returned by [`GameEngine`].
 #[derive(Debug, Error)]
 pub enum EngineError {
-    /// プレイヤー側のエラー．
+    /// Error from a player.
     #[error("player error: {0}")]
     Player(#[from] PlayerError),
 
-    /// ルール違反 ( 不正手など)．
+    /// Rule violation (e.g. illegal move).
     #[error("rule error: {0}")]
     Rule(#[from] OthelloError),
 
-    /// 設定が不正．
+    /// Invalid configuration.
     #[error("config error: {0}")]
     Config(String),
 
-    /// 安全装置の発動 ( `max_moves` 超過)．
+    /// Safety cap tripped (`max_moves` exceeded).
     #[error("max moves exceeded: {limit}")]
     MaxMovesExceeded {
-        /// 上限値．
+        /// The cap value.
         limit: u32,
     },
 
-    /// プレイヤーが合法手を持つのに `Move::Pass` を返した．
+    /// A player returned `Move::Pass` while legal moves existed.
     #[error("player attempted to pass while legal moves exist")]
     UnexpectedPass,
 
-    /// JSONL ロガー書き込み失敗．
+    /// JSONL logger write failed.
     #[error("jsonl logger error: {0}")]
     Logger(#[from] othello_io::IoError),
 }
 
-/// 1 局を実行するゲームエンジン．
+/// Game engine that executes a single game.
 pub struct GameEngine {
     state: GameState,
     history: GameHistory,
@@ -112,7 +115,7 @@ pub struct GameEngine {
 }
 
 impl GameEngine {
-    /// 設定からエンジンを生成する．
+    /// Builds an engine from the given configuration.
     pub fn new(config: EngineConfig) -> Result<Self, EngineError> {
         let initial = GameState::standard(config.board_size).map_err(EngineError::from)?;
         let history = GameHistory::new(initial.clone());
@@ -125,14 +128,17 @@ impl GameEngine {
         })
     }
 
-    /// 1 局を実行する ( 既存 API)．
+    /// Runs a single game (legacy API).
     ///
-    /// アルゴリズムは設計書 §3.3.3 の pseudocode に従う．
-    /// プレイヤーが合法手を持つのに Pass を返した場合は [`EngineError::UnexpectedPass`]．
-    /// 合法手が無い ( pass しか取れない) 場合は engine 側で `Move::Pass` を強制する．
+    /// The algorithm follows the pseudocode in §3.3.3 of the design
+    /// document. Returns [`EngineError::UnexpectedPass`] if a player
+    /// returns `Pass` while legal moves exist. When no legal move is
+    /// available (the side can only pass), the engine substitutes
+    /// `Move::Pass` automatically.
     ///
-    /// JSONL ロガー / tracing スパンは内部の `players` 情報を `<unknown>` として記録する．
-    /// プレイヤー名を含めて出力したい場合は [`Self::run_with_meta`] を使う．
+    /// The JSONL logger / tracing span record the players as
+    /// `<unknown>`. Use [`Self::run_with_meta`] to include the actual
+    /// player names in the output.
     pub fn run<B: Player, W: Player>(
         &mut self,
         black: &mut B,
@@ -148,7 +154,8 @@ impl GameEngine {
         )
     }
 
-    /// 1 局を実行し，JSONL/tracing にプレイヤー名を渡せる版．
+    /// Runs a single game and forwards player names to the JSONL logger
+    /// and tracing spans.
     pub fn run_with_meta<B: Player, W: Player>(
         &mut self,
         black: &mut B,
@@ -321,30 +328,31 @@ impl GameEngine {
         Ok(result)
     }
 
-    /// 履歴の参照を返す．
+    /// Returns a reference to the history.
     #[inline]
     #[must_use]
     pub fn history(&self) -> &GameHistory {
         &self.history
     }
 
-    /// 現在の `GameState`．
+    /// Returns the current `GameState`.
     #[inline]
     #[must_use]
     pub fn state(&self) -> &GameState {
         &self.state
     }
 
-    /// 設定の参照．
+    /// Returns a reference to the configuration.
     #[inline]
     #[must_use]
     pub fn config(&self) -> &EngineConfig {
         &self.config
     }
 
-    /// 履歴を消費して `GameRecord` に変換する．
+    /// Consumes the history and converts it into a `GameRecord`.
     ///
-    /// `players` には実際に対戦した黒白プレイヤーの情報を渡す ( name + params)．
+    /// Pass the actual black/white player information (name + params) in
+    /// `players`.
     pub fn into_record(self, players: PlayerPair) -> GameRecord {
         let metadata = GameMetadata {
             id: self

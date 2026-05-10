@@ -1,14 +1,14 @@
-//! [`BatchRunner`]: 複数局のゲームを `rayon` で並列実行する．
+//! [`BatchRunner`]: runs multiple games in parallel via `rayon`.
 //!
-//! 設計書 §3.3.4 準拠．
+//! Conforms to §3.3.4 of the design document.
 //!
-//! ## 主な機能
+//! ## Features
 //!
-//! - スレッド数指定 ( 0 = 論理コア数)
-//! - 各ゲームへの seed 派生 ( ベース seed + ゲーム index)
-//! - `swap_colors` で偶数/奇数局の黒白入れ替え
-//! - 各ゲームの JSON 棋譜出力 (`log_dir`)
-//! - 全局集約 JSONL ログ (`jsonl_log_path`)
+//! - Configurable thread count (0 = use all logical cores).
+//! - Per-game seed derivation (base seed + game index).
+//! - Black/white swap on alternate game indices via `swap_colors`.
+//! - Per-game JSON record output (`log_dir`).
+//! - Aggregated JSONL log spanning all games (`jsonl_log_path`).
 
 use crate::engine::{EngineConfig, EngineError, GameEngine};
 use crate::history::GameHistory;
@@ -29,34 +29,36 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
 
-/// バッチ実行の進捗コールバック．各ゲーム完了時に 1 回呼ばれる．
+/// Progress callback for batch execution. Invoked once per finished game.
 ///
-/// `BatchRunner.run` の中で `rayon` の並列スレッドから呼ばれるため，実装は
-/// 内部で同期化されている必要がある ( `Mutex` 等で囲む)．
+/// Called from `rayon` worker threads inside `BatchRunner::run`, so the
+/// implementation must synchronize internally (e.g. wrap state in a
+/// `Mutex`).
 pub trait ProgressCallback: Send + Sync {
-    /// `index` 番目 ( 0 起点) のゲームが完了したときに呼ばれる．
+    /// Invoked when the game at `game_index` (0-based) has finished.
     fn on_game_complete(&self, game_index: usize, summary: &GameSummary);
 }
 
-/// バッチ実行設定．
+/// Configuration for batch execution.
 pub struct BatchConfig {
-    /// 試合数．
+    /// Number of games to play.
     pub num_games: usize,
-    /// 並列スレッド数 ( 0 = 論理コア数を rayon に委ねる)．
+    /// Parallel thread count (0 = let rayon use all logical cores).
     pub num_threads: usize,
-    /// ベース seed ( 各ゲームには `seed + game_index` が渡る)．
+    /// Base seed (each game receives `seed + game_index`).
     pub seed: Option<u64>,
-    /// 各ゲームの JSON 棋譜を `<dir>/game_{index:08}.json` で保存する．
+    /// If set, writes each game's JSON record to
+    /// `<dir>/game_{index:08}.json`.
     pub log_dir: Option<PathBuf>,
-    /// 偶奇でプレイヤー色を入れ替える．
+    /// Swap player colors on alternate game indices.
     pub swap_colors: bool,
-    /// 盤面サイズ．
+    /// Board size.
     pub board_size: BoardSize,
-    /// 安全装置．
+    /// Safety cap on the number of moves per game.
     pub max_moves: Option<u32>,
-    /// 全局イベントを 1 ファイルに集約する JSONL ログ．
+    /// JSONL log aggregating all events into a single file.
     pub jsonl_log_path: Option<PathBuf>,
-    /// 各ゲーム完了時に呼ばれるコールバック ( 進捗バー等)．
+    /// Callback invoked when each game completes (e.g. for a progress bar).
     pub progress: Option<Arc<dyn ProgressCallback>>,
 }
 
@@ -92,87 +94,89 @@ impl Default for BatchConfig {
     }
 }
 
-/// 1 局のサマリ．
+/// Summary of a single game.
 #[derive(Debug, Clone)]
 pub struct GameSummary {
-    /// ゲーム ID ( UUID v4 文字列または `factory` index)．
+    /// Game ID (UUID v4 string or the `factory` index).
     pub game_id: String,
-    /// 黒石数．
+    /// Black stone count.
     pub black_score: u32,
-    /// 白石数．
+    /// White stone count.
     pub white_score: u32,
-    /// 勝者 ( 引き分けは `None`)．
+    /// Winner (`None` for a draw).
     pub winner: Option<Color>,
-    /// 総手数．
+    /// Total number of moves.
     pub total_moves: u32,
-    /// `swap_colors=true` で実際に入れ替えたか ( この局のみ)．
+    /// Whether colors were actually swapped for this game (only set when
+    /// `swap_colors=true`).
     pub colors_swapped: bool,
 }
 
-/// バッチ実行結果．
+/// Result of a batch run.
 #[derive(Debug, Clone)]
 pub struct BatchResult {
-    /// 完了局数．
+    /// Number of games that finished.
     pub num_games: usize,
-    /// 黒勝利数．
+    /// Number of black wins.
     pub black_wins: usize,
-    /// 白勝利数．
+    /// Number of white wins.
     pub white_wins: usize,
-    /// 引き分け数．
+    /// Number of draws.
     pub draws: usize,
-    /// 総手数 ( 全局合計)．
+    /// Total number of moves across all games.
     pub total_moves: u64,
-    /// 経過時間．
+    /// Wall-clock elapsed time.
     pub elapsed: Duration,
-    /// 各局のサマリ．
+    /// Per-game summaries.
     pub per_game: Vec<GameSummary>,
 }
 
-/// バッチ実行エラー．
+/// Errors returned by [`BatchRunner`].
 #[derive(Debug, Error)]
 pub enum BatchError {
-    /// エンジンエラー．
+    /// Engine error.
     #[error("engine error in game #{index}: {source}")]
     Engine {
-        /// 対象ゲーム index．
+        /// Index of the failing game.
         index: usize,
-        /// 原因．
+        /// Underlying cause.
         source: EngineError,
     },
-    /// プレイヤーエラー．
+    /// Player error.
     #[error("player error: {0}")]
     Player(#[from] PlayerError),
-    /// IO エラー．
+    /// I/O error.
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
-    /// rayon スレッドプール構築失敗．
+    /// Failed to build the rayon thread pool.
     #[error("thread pool error: {0}")]
     ThreadPool(String),
 }
 
-/// バッチ実行器．
+/// Batch runner.
 pub struct BatchRunner {
     config: BatchConfig,
 }
 
 impl BatchRunner {
-    /// 設定からバッチ実行器を生成する．
+    /// Builds a runner from the given configuration.
     #[must_use]
     pub fn new(config: BatchConfig) -> Self {
         Self { config }
     }
 
-    /// 設定への参照．
+    /// Returns a reference to the configuration.
     #[inline]
     #[must_use]
     pub fn config(&self) -> &BatchConfig {
         &self.config
     }
 
-    /// バッチを実行する．
+    /// Runs the batch.
     ///
-    /// `factory` は各ゲームの seed を受け取り `(black_player, white_player)` を返す．
-    /// `swap_colors == true` のとき，奇数 index のゲームでは戻り値の tuple を逆にして使う．
+    /// `factory` takes the per-game seed and returns
+    /// `(black_player, white_player)`. When `swap_colors == true`, the
+    /// returned tuple is reversed for odd-indexed games.
     pub fn run<F>(&self, factory: F) -> Result<BatchResult, BatchError>
     where
         F: Fn(u64) -> (Box<dyn Player>, Box<dyn Player>) + Sync + Send,
@@ -466,10 +470,11 @@ fn now() -> DateTime<FixedOffset> {
     local.with_timezone(&local.offset().fix())
 }
 
-/// `Player` の `color()` を強制的に `Black` または `White` に置換するアダプタ．
+/// Adapter that forces a `Player`'s `color()` to be `Black` or `White`.
 ///
-/// `BatchRunner` で `swap_colors` を扱うために使う．元の Player はゲームの
-/// **「黒側の指し手」「白側の指し手」** として使われる．
+/// Used by `BatchRunner` to implement `swap_colors`. The wrapped player is
+/// then used as either the **black side mover** or the **white side mover**
+/// for the game.
 struct ColorAdapter {
     inner: Box<dyn Player>,
     forced: Color,

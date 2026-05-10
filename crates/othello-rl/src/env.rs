@@ -1,17 +1,21 @@
-//! [`OthelloEnv`]: Gymnasium 互換の単エージェント Othello 環境．
+//! [`OthelloEnv`]: a Gymnasium-compatible single-agent Othello environment.
 //!
-//! ## ループ仕様
+//! ## Loop specification
 //!
-//! 1. `reset` で初期局面を作る．`agent_color` が `White` なら opponent ( Black) を 1 手指してから
-//!    最初の observation を返す．
+//! 1. `reset` builds the initial position. If `agent_color` is `White`, the
+//!    opponent (Black) plays one move first before the first observation is
+//!    returned.
 //! 2. `step(action)`:
-//!    - 不正手なら [`RlError::IllegalAction`] / [`RlError::OutOfRange`]
-//!    - agent の手を適用
-//!    - 終局チェック → 終局なら reward を計算して return
-//!    - opponent ターンを進める ( opponent が合法手なしなら自動 Pass)．
-//!      opponent が手を指したら agent ターンへ戻る．agent が合法手なしなら自動 Pass し，
-//!      再度 opponent ターン ( ただし両者連続パスで終局)．
-//!    - observation, reward, terminated, info を返す．
+//!    - Returns [`RlError::IllegalAction`] / [`RlError::OutOfRange`] for
+//!      invalid moves.
+//!    - Applies the agent's move.
+//!    - Checks for termination; if terminated, computes the reward and
+//!      returns.
+//!    - Advances the opponent's turn (auto-pass if the opponent has no legal
+//!      moves). After the opponent moves, returns to the agent's turn. If
+//!      the agent has no legal moves, auto-passes and returns to the
+//!      opponent's turn (two consecutive passes terminate the game).
+//!    - Returns observation, reward, terminated, and info.
 
 use crate::action_space::Action;
 use crate::error::RlError;
@@ -23,20 +27,22 @@ use othello_player::Player;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 
-/// 環境設定．
+/// Environment configuration.
 #[derive(Debug, Clone)]
 pub struct EnvConfig {
-    /// 盤面サイズ．
+    /// Board size.
     pub board_size: BoardSize,
-    /// エージェント色．
+    /// Agent color.
     pub agent_color: Color,
-    /// 観測形式．
+    /// Observation format.
     pub observation_type: ObservationType,
-    /// 報酬モード．
+    /// Reward mode.
     pub reward_mode: RewardMode,
-    /// 履歴を含めるか ( Phase 4 では未使用．`MoveSequence` 観測が常に履歴を見る)．
+    /// Whether to include history (unused in Phase 4; `MoveSequence`
+    /// observations always read the history).
     pub include_history_in_obs: bool,
-    /// `truncated = true` を立てる手数閾値 ( `None` で無制限)．
+    /// Move-count threshold above which `truncated = true` (use `None` for
+    /// unlimited).
     pub max_steps: Option<u32>,
 }
 
@@ -53,35 +59,36 @@ impl Default for EnvConfig {
     }
 }
 
-/// `step` の戻り値．
+/// Return value of [`OthelloEnv::step`].
 #[derive(Debug, Clone)]
 pub struct StepResult {
-    /// 観測．
+    /// Observation.
     pub observation: Observation,
-    /// 報酬．
+    /// Reward.
     pub reward: f32,
-    /// 終局フラグ．
+    /// Termination flag.
     pub terminated: bool,
-    /// 打ち切りフラグ ( max_steps 超過)．
+    /// Truncation flag (set when `max_steps` is exceeded).
     pub truncated: bool,
-    /// 補助情報．
+    /// Auxiliary information.
     pub info: StepInfo,
 }
 
-/// step の補助情報．
+/// Auxiliary information returned by `step`.
 #[derive(Debug, Clone)]
 pub struct StepInfo {
-    /// 合法手マスク ( 長さ = `Action::space_size`)．
+    /// Legal-action mask (length = `Action::space_size`).
     pub action_mask: Array1<bool>,
-    /// 合法手数．
+    /// Number of legal moves.
     pub legal_count: u32,
-    /// 累計手数．
+    /// Cumulative move number.
     pub move_number: u32,
-    /// 現手番 ( agent / opponent / 終局時は最終 side)．
+    /// Current side to move (agent / opponent, or the final side at
+    /// termination).
     pub side_to_move: Color,
 }
 
-/// 単エージェント Othello 環境．
+/// Single-agent Othello environment.
 pub struct OthelloEnv {
     state: GameState,
     config: EnvConfig,
@@ -94,7 +101,7 @@ pub struct OthelloEnv {
 }
 
 impl OthelloEnv {
-    /// 設定と opponent を渡して環境を生成する．
+    /// Creates an environment from a configuration and an opponent.
     #[must_use]
     pub fn new(config: EnvConfig, opponent: Box<dyn Player>) -> Self {
         let state = GameState::standard(config.board_size).expect("valid board size");
@@ -109,14 +116,14 @@ impl OthelloEnv {
         }
     }
 
-    /// カスタム報酬関数を設定する ( builder)．
+    /// Sets a custom reward function (builder).
     #[must_use]
     pub fn with_custom_reward(mut self, reward: Box<dyn RewardFn>) -> Self {
         self.custom_reward = Some(reward);
         self
     }
 
-    /// 環境をリセットする．
+    /// Resets the environment.
     pub fn reset(&mut self, seed: Option<u64>) -> (Observation, StepInfo) {
         let s = seed.unwrap_or(0);
         self.rng = ChaCha8Rng::seed_from_u64(s);
@@ -136,7 +143,7 @@ impl OthelloEnv {
         (obs, info)
     }
 
-    /// Action を 1 つ適用する．
+    /// Applies a single action.
     pub fn step(&mut self, action: Action) -> Result<StepResult, RlError> {
         action.validate(self.config.board_size)?;
         // 終局済みでの step は終局報酬 0 + terminated を返す ( SB3 互換的振る舞い)．
@@ -204,7 +211,7 @@ impl OthelloEnv {
         })
     }
 
-    /// 現局面の合法 Action 列．
+    /// Returns the legal actions for the current position.
     #[must_use]
     pub fn legal_actions(&self) -> Vec<Action> {
         if self.state.side_to_move != self.config.agent_color {
@@ -221,7 +228,8 @@ impl OthelloEnv {
         }
     }
 
-    /// 現局面の合法手マスク ( 長さ = N*M+1)．
+    /// Returns the legal-move mask for the current position (length =
+    /// `N*M+1`).
     #[must_use]
     pub fn action_mask(&self) -> Array1<bool> {
         let size = self.config.board_size;
@@ -242,7 +250,7 @@ impl OthelloEnv {
         mask
     }
 
-    /// ASCII 描画．
+    /// Renders the board as ASCII.
     #[must_use]
     pub fn render(&self) -> String {
         let size = self.state.board.size();
@@ -273,14 +281,14 @@ impl OthelloEnv {
         s
     }
 
-    /// 内部状態の参照 ( デバッグ用)．
+    /// Returns a reference to the internal state (for debugging).
     #[inline]
     #[must_use]
     pub fn state(&self) -> &GameState {
         &self.state
     }
 
-    /// 設定の参照．
+    /// Returns a reference to the configuration.
     #[inline]
     #[must_use]
     pub fn config(&self) -> &EnvConfig {
@@ -320,8 +328,9 @@ impl OthelloEnv {
         }
     }
 
-    /// opponent ターンを進めて agent ターンに戻す．
-    /// agent 手番でも合法手がなければ自動 Pass を挟む ( 両者 Pass で終局判定)．
+    /// Advances the opponent's turn until control returns to the agent.
+    /// Auto-passes if the agent has no legal moves (two consecutive passes
+    /// terminate the game).
     fn advance_until_agent_or_terminal(&mut self) -> Result<(), RlError> {
         let agent = self.config.agent_color;
         loop {

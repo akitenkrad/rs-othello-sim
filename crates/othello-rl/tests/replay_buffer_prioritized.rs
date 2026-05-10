@@ -1,4 +1,4 @@
-//! `PrioritizedReplayBuffer` ( PER) の動作テスト．
+//! Behavioural tests for `PrioritizedReplayBuffer` (PER).
 
 use ndarray::{Array1, Array3};
 use othello_core::Color;

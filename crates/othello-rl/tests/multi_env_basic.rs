@@ -1,4 +1,4 @@
-//! `OthelloMultiEnv` の統合テスト．
+//! Integration tests for `OthelloMultiEnv`.
 
 use othello_core::Color;
 use othello_rl::prelude::*;

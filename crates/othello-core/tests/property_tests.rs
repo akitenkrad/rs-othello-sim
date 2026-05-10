@@ -1,12 +1,17 @@
-//! プロパティベーステスト ( proptest)．
+//! Property-based tests (proptest).
 //!
-//! 検証する性質:
-//! 1. ランダム合法手を選び続ければ，最大 200 手以内で必ず終局に達する
-//! 2. 8×8 で `Bitboard8` と `GenericBoard` に同じ手列を適用したとき，
-//!    全ステップで石配置・合法手集合・反転座標集合が一致する ( 同値性)
-//! 3. 終局時には連続パス 2 回 か 盤面満杯 のいずれかが成立する
-//! 4. apply の戻り値 ( 反転座標) は必ず 1 つ以上 ( Place 時)
-//! 5. 反転座標は全て相手色から自色に変わっている
+//! Properties under test:
+//! 1. Repeatedly choosing random legal moves always terminates within 200
+//!    moves.
+//! 2. Applying the same move sequence to `Bitboard8` and `GenericBoard`
+//!    on an 8x8 board yields matching stone positions, legal-move sets,
+//!    and flip-coordinate sets at every step (equivalence).
+//! 3. At termination either two consecutive passes have occurred or the
+//!    board is full.
+//! 4. The return value of `apply` (flipped coordinates) is non-empty for
+//!    `Place` moves.
+//! 5. Every flipped coordinate has been changed from the opponent's color
+//!    to ours.
 
 use othello_core::generic_board::GenericBoard;
 use othello_core::prelude::*;
@@ -16,9 +21,10 @@ use rand::seq::SliceRandom;
 use rand_chacha::ChaCha8Rng;
 use std::collections::BTreeSet;
 
-/// ランダム自己対戦を行い，最終ゲーム状態と総手数を返す．
+/// Plays a random self-play game and returns the final game state and the
+/// total number of moves played.
 ///
-/// 最大 `max_steps` 手で打ち切り．
+/// Aborts after at most `max_steps` moves.
 fn play_random_game_8x8(seed: u64, max_steps: u32) -> (GameState, u32) {
     let mut state = GameState::standard_8x8();
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
@@ -37,16 +43,19 @@ fn play_random_game_8x8(seed: u64, max_steps: u32) -> (GameState, u32) {
 }
 
 proptest! {
-    /// 性質 1: ランダム合法手を続けると 200 手以内で必ず終局する．
+    /// Property 1: continually playing random legal moves terminates
+    /// within 200 moves.
     ///
-    /// 性質 3: 終局時には以下のいずれかが成立する．
-    ///   (a) 連続パス 2 回 ( consecutive_passes >= 2)
-    ///   (b) 盤面満杯 ( empty_count == 0)
-    ///   (c) 両者とも合法手なし ( has_any_legal_move(black) == false かつ
-    ///       has_any_legal_move(white) == false) — 空マスはあるが両者置けない局面
+    /// Property 3: at termination one of the following holds:
+    ///   (a) two consecutive passes (`consecutive_passes >= 2`),
+    ///   (b) the board is full (`empty_count == 0`),
+    ///   (c) neither side has any legal move
+    ///       (`has_any_legal_move(black) == false` and
+    ///       `has_any_legal_move(white) == false`) — empty squares exist
+    ///       but neither side can play.
     ///
-    /// (c) は (a) と区別される: 終局判定で先に board.is_terminal() が真になった場合，
-    /// 連続パス回数は 0 のまま終局する．
+    /// (c) is distinct from (a): if `board.is_terminal()` becomes true
+    /// first, the game terminates while `consecutive_passes` is still 0.
     #[test]
     fn random_play_terminates_within_200_steps(seed in 0u64..10_000) {
         let (state, steps) = play_random_game_8x8(seed, 200);
@@ -62,9 +71,12 @@ proptest! {
         );
     }
 
-    /// 性質 2: 8×8 における Bitboard8 と GenericBoard の同値性．
+    /// Property 2: equivalence of `Bitboard8` and `GenericBoard` on the
+    /// standard 8x8 board.
     ///
-    /// 同じシードで同じ手列を作り，両実装で並行に進めて全ステップで一致を確認する．
+    /// Generates the same move sequence from a shared seed, advances both
+    /// implementations in parallel, and verifies that they agree at every
+    /// step.
     #[test]
     fn bitboard_and_generic_equivalence_8x8(seed in 0u64..5_000) {
         let mut bb_state = GameState::standard_8x8();
@@ -137,7 +149,9 @@ proptest! {
         }
     }
 
-    /// 性質 4 & 5: 着手成功時，反転座標は 1 つ以上で，全て自色になっている．
+    /// Properties 4 & 5: when a move succeeds, the set of flipped
+    /// coordinates is non-empty and every flipped stone now matches the
+    /// player's color.
     #[test]
     fn flips_are_nonempty_and_become_own(seed in 0u64..3_000) {
         let mut state = GameState::standard_8x8();
@@ -164,7 +178,8 @@ proptest! {
         }
     }
 
-    /// 性質 ( 各種サイズ): 4×4 / 6×6 / 10×10 でランダム自己対戦が終局する．
+    /// Property (various sizes): random self-play terminates on 4x4, 6x6,
+    /// and 10x10 boards.
     #[test]
     fn variable_size_termination(seed in 0u64..500, side_len in prop::sample::select(vec![4u8, 6, 10])) {
         let size = BoardSize::square(side_len);

@@ -1,10 +1,12 @@
-//! ランダム自己対戦のベンチマーク．
+//! Benchmarks for random self-play.
 //!
-//! 設計書 §9 の目標値:
-//! - 8×8 ランダム自己対戦 $\geq 10^6$ 手/秒 ( 単一スレッド)
-//! - 16×16 ランダム自己対戦 $\geq 10^4$ 手/秒
+//! Targets from design doc §9:
+//! - 8x8 random self-play: at least $10^6$ moves per second (single
+//!   thread).
+//! - 16x16 random self-play: at least $10^4$ moves per second.
 //!
-//! 1 ゲーム = 完全終局までを 1 unit として throughput を計測する．
+//! Throughput is measured with one fully terminated game as a single
+//! unit.
 
 use criterion::{Criterion, Throughput, black_box, criterion_group, criterion_main};
 use othello_core::prelude::*;

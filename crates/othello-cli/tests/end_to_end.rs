@@ -1,4 +1,6 @@
-//! E2E: Random vs Random で 1 局シミュレーション → JSON 保存 → 読込 → Replayer で再生 → 終局スコア一致．
+//! End-to-end: simulate one Random vs Random game, save it as JSON,
+//! reload it, replay it through `Replayer`, and verify that the final
+//! score matches.
 
 use othello_core::prelude::*;
 use othello_engine::prelude::*;

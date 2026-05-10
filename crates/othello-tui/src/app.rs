@@ -1,29 +1,30 @@
-//! TUI アプリケーション状態．描画と入力ロジックから独立してテスト可能にする．
+//! TUI application state. Decoupled from rendering and input logic to make
+//! it independently testable.
 
 use othello_core::{Color, Coord, GameState, Move};
 
-/// UI モード．
+/// UI mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppMode {
-    /// Play ( 2 人対戦)．
+    /// Play (two-player match).
     Play,
-    /// Replay ( 棋譜再生)．
+    /// Replay (replay a game record).
     Replay,
-    /// Observe ( AI 対戦観戦)．
+    /// Observe (watch an AI vs AI match).
     Observe,
 }
 
-/// 盤面上のカーソル位置．
+/// Cursor position on the board.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cursor {
-    /// 行 ( 0 起点)．
+    /// Row (0-based).
     pub row: u8,
-    /// 列 ( 0 起点)．
+    /// Column (0-based).
     pub col: u8,
 }
 
 impl Cursor {
-    /// 中央付近の位置を返す．
+    /// Returns a position near the center of the board.
     #[must_use]
     pub fn center(state: &GameState) -> Self {
         let size = state.board.size();
@@ -33,13 +34,13 @@ impl Cursor {
         }
     }
 
-    /// `Coord` 表現．
+    /// Returns the cursor as a `Coord`.
     #[must_use]
     pub fn as_coord(&self) -> Coord {
         Coord::new(self.row, self.col)
     }
 
-    /// 上下左右に移動する ( 範囲クランプ)．
+    /// Moves the cursor up/down/left/right, clamped to the board.
     pub fn move_by(&mut self, drow: i8, dcol: i8, state: &GameState) {
         let size = state.board.size();
         let nr = (self.row as i16 + drow as i16).clamp(0, size.rows as i16 - 1);
@@ -49,55 +50,56 @@ impl Cursor {
     }
 }
 
-/// Evaluator overlay 1 行: `(move 表記, 評価値, 表示順)`．
+/// One row in the evaluator overlay: `(move label, score, display order)`.
 ///
-/// 大きい順にソートされた状態で `AppState` に格納される．
+/// Stored in `AppState` already sorted by score in descending order.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EvaluatorEntry {
-    /// 手の文字列表現 ( 例 `"D3"`，`"pass"`)．
+    /// String representation of the move (e.g. `"D3"`, `"pass"`).
     pub move_label: String,
-    /// 評価値 ( 0.0 〜 1.0)．
+    /// Score in `[0.0, 1.0]`.
     pub score: f32,
 }
 
-/// Evaluator overlay の状態．
+/// State for the evaluator overlay.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct EvaluatorOverlay {
-    /// プレイヤー名 ( 表示ヘッダ用)．
+    /// Player name shown in the header.
     pub source: String,
-    /// 行リスト ( score 降順)．
+    /// Rows sorted by score in descending order.
     pub entries: Vec<EvaluatorEntry>,
 }
 
-/// TUI アプリの可視状態スナップショット．描画関数 [`crate::ui::render`] が読む．
+/// Visible-state snapshot of the TUI app, consumed by [`crate::ui::render`].
 #[derive(Debug, Clone)]
 pub struct AppState {
-    /// 現在の UI モード．
+    /// Current UI mode.
     pub mode: AppMode,
-    /// 表示中のゲーム状態．
+    /// Game state being displayed.
     pub state: GameState,
-    /// 盤面上のカーソル位置 ( Play モードでのみ意味がある)．
+    /// Cursor position on the board (only meaningful in Play mode).
     pub cursor: Cursor,
-    /// 手番情報メッセージ ( 「Black to move」「Pass」等)．
+    /// Side-to-move / status message (e.g. "Black to move", "Pass").
     pub message: String,
-    /// プレイヤー名 ( 黒/白)．
+    /// Player names (black, white).
     pub players: (String, String),
-    /// 着手列の文字列表現 ( "1. d3 c5  2. e3 ...")．
+    /// String representation of the move sequence (e.g. "1. d3 c5  2. e3 ...").
     pub move_history: String,
-    /// 現在何手目を見ているか (`cursor` ではなく**手数のカーソル**)．
+    /// Index of the current move being shown (a **move-count cursor**, not
+    /// the board `cursor`).
     pub move_cursor: usize,
-    /// 総手数 ( Replay モードで `<n>/<total>` 表示用)．
+    /// Total number of moves (used by Replay mode to render `<n>/<total>`).
     pub total_moves: usize,
-    /// 自動再生中フラグ ( Replay モード)．
+    /// Whether auto-play is active (Replay mode).
     pub auto_play: bool,
-    /// 終局かどうか．
+    /// Whether the game has ended.
     pub finished: bool,
-    /// Evaluator overlay ( Observe モードで MCTS 等の visit count を表示)．
+    /// Evaluator overlay (e.g. MCTS visit counts in Observe mode).
     pub evaluator: Option<EvaluatorOverlay>,
 }
 
 impl AppState {
-    /// Play モード用の初期スナップショットを作る．
+    /// Builds the initial snapshot for Play mode.
     #[must_use]
     pub fn new_play(state: GameState) -> Self {
         let cursor = Cursor::center(&state);
@@ -117,7 +119,7 @@ impl AppState {
         }
     }
 
-    /// Observe モード用の初期スナップショットを作る．
+    /// Builds the initial snapshot for Observe mode.
     #[must_use]
     pub fn new_observe(state: GameState, players: (String, String)) -> Self {
         let cursor = Cursor::center(&state);
@@ -125,7 +127,7 @@ impl AppState {
             mode: AppMode::Observe,
             state,
             cursor,
-            message: String::from("Observe ( Space=step, a=auto, +/-=delay, q=quit)"),
+            message: String::from("Observe (Space=step, a=auto, +/-=delay, q=quit)"),
             players,
             move_history: String::new(),
             move_cursor: 0,
@@ -136,7 +138,7 @@ impl AppState {
         }
     }
 
-    /// Replay モード用の初期スナップショットを作る．
+    /// Builds the initial snapshot for Replay mode.
     #[must_use]
     pub fn new_replay(state: GameState, total: usize) -> Self {
         let cursor = Cursor::center(&state);
@@ -156,7 +158,7 @@ impl AppState {
     }
 }
 
-/// 直近何手分かをヒューマン可読な形式で文字列化する補助．
+/// Helper that formats the most recent moves into a human-readable string.
 #[must_use]
 pub fn format_move_history(moves: &[(Color, Move)], up_to: usize) -> String {
     use std::fmt::Write;

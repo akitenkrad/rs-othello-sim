@@ -1,4 +1,4 @@
-//! `replay` サブコマンド: 棋譜を読み込んで TUI で再生する．
+//! `replay` subcommand: load a game record and replay it in the TUI.
 
 use anyhow::{Context, Result};
 use clap::{Args as ClapArgs, ValueEnum};
@@ -7,36 +7,36 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-/// `replay` の引数．
+/// Arguments for `replay`.
 #[derive(Debug, ClapArgs)]
 pub struct Args {
-    /// 棋譜ファイル．
+    /// Game-record file.
     #[arg(long)]
     pub file: PathBuf,
 
-    /// 棋譜フォーマット．
+    /// Game-record format.
     #[arg(long, value_enum, default_value_t = ReplayFormat::Json)]
     pub format: ReplayFormat,
 
-    /// 起動直後から自動再生を開始する．
+    /// Start auto-play immediately on launch.
     #[arg(long, default_value_t = false)]
     pub auto: bool,
 
-    /// 自動再生の手間隔 ( ミリ秒)．Replay モード内で `+` / `-` で調整可能．
+    /// Auto-play step interval in milliseconds. Adjustable from Replay mode with `+` / `-`.
     #[arg(long, default_value_t = 500)]
     pub auto_delay: u64,
 }
 
-/// 入力フォーマット．
+/// Input format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum ReplayFormat {
-    /// 自前 JSON．
+    /// Native JSON.
     Json,
-    /// GGF．
+    /// GGF.
     Ggf,
 }
 
-/// `replay` 実行関数．
+/// Entry point for `replay`.
 pub fn run(args: Args) -> Result<()> {
     let file = File::open(&args.file)
         .with_context(|| format!("failed to open: {}", args.file.display()))?;

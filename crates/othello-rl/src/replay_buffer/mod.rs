@@ -25,85 +25,89 @@ pub use uniform::UniformReplayBuffer;
 use ndarray::{Array1, Array2, Array4, Axis};
 use thiserror::Error;
 
-/// Replay buffer の共通エラー型．
+/// Common error type for replay buffers.
 #[derive(Debug, Error)]
 pub enum ReplayError {
-    /// バッファに何も入っていない．
+    /// The buffer is empty.
     #[error("buffer is empty")]
     Empty,
-    /// 要求されたバッチサイズが現在のバッファ件数より大きい ( または 0)．
+    /// The requested batch size exceeds the current buffer length (or is
+    /// zero).
     #[error("requested batch size {requested} exceeds buffer length {available}")]
     BatchTooLarge {
-        /// 要求バッチサイズ．
+        /// Requested batch size.
         requested: usize,
-        /// バッファに入っている件数．
+        /// Number of transitions currently in the buffer.
         available: usize,
     },
-    /// `update_priorities` で indices と priorities の長さが不一致．
+    /// `update_priorities` was called with mismatched `indices` and
+    /// `priorities` lengths.
     #[error("priority arrays must have equal length: indices={indices}, priorities={priorities}")]
     PriorityLengthMismatch {
-        /// indices 配列長．
+        /// Length of the `indices` array.
         indices: usize,
-        /// priorities 配列長．
+        /// Length of the `priorities` array.
         priorities: usize,
     },
-    /// priority が負または非有限．
+    /// Priority is negative or non-finite.
     #[error("priority must be non-negative and finite, got {0}")]
     NegativePriority(f32),
-    /// `update_priorities` で渡された index が範囲外．
+    /// An index passed to `update_priorities` is out of range.
     #[error("index {0} out of bounds (buffer length {1})")]
     IndexOutOfBounds(usize, usize),
-    /// バッチ内 transition の観測 / マスク shape が一貫していない．
+    /// Transition observations or masks within a batch have inconsistent
+    /// shapes.
     #[error("inconsistent observation shape across transitions in the batch")]
     ShapeMismatch,
-    /// 棋譜が壊れている / ルール違反．
+    /// The game record is corrupt or violates the rules.
     #[error("invalid record: {0}")]
     InvalidRecord(String),
 }
 
-/// Replay buffer の共通インターフェース．
+/// Common interface for replay buffers.
 ///
-/// `Send` を要求するのは self-play ワーカからの flush を想定するため．
+/// `Send` is required because flushes are expected from self-play workers.
 pub trait ReplayBuffer: Send {
-    /// 1 件の transition を追加する．
+    /// Adds a single transition.
     fn push(&mut self, transition: Transition);
 
-    /// 現在のバッファ内件数．
+    /// Returns the number of transitions currently in the buffer.
     fn len(&self) -> usize;
 
-    /// 容量．
+    /// Returns the buffer capacity.
     fn capacity(&self) -> usize;
 
-    /// 空かどうか．
+    /// Returns whether the buffer is empty.
     fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// 容量上限まで埋まっているかどうか．
+    /// Returns whether the buffer is filled to capacity.
     fn is_full(&self) -> bool {
         self.len() == self.capacity()
     }
 
-    /// `batch_size` 件サンプリングする．`rng` は外部注入で再現性を確保する．
+    /// Samples `batch_size` transitions. The `rng` is injected externally
+    /// to keep sampling reproducible.
     fn sample(
         &mut self,
         batch_size: usize,
         rng: &mut dyn rand::RngCore,
     ) -> Result<TransitionBatch, ReplayError>;
 
-    /// PER の場合，TD error などを priority として更新する．
-    /// uniform の場合は no-op．
+    /// For PER, updates priorities with values such as TD-error magnitudes.
+    /// A no-op for uniform replay buffers.
     fn update_priorities(
         &mut self,
         indices: &[usize],
         priorities: &[f32],
     ) -> Result<(), ReplayError>;
 
-    /// バッファを空にする．
+    /// Clears the buffer.
     fn clear(&mut self);
 }
 
-/// `stack_transitions` の戻り値タプル．
+/// Return-value tuple of `stack_transitions`.
 type StackedBatch = (
     Array4<f32>,
     Array1<u32>,
@@ -112,10 +116,12 @@ type StackedBatch = (
     Array2<bool>,
 );
 
-/// `Transition` の参照スライスから (observations, actions, policies, values, legal_masks) を stack する．
+/// Stacks a slice of `Transition` references into
+/// `(observations, actions, policies, values, legal_masks)`.
 ///
-/// `policy` がバッチ内で 1 件でも `None` の場合，戻り値の `policies` は `None`．
-/// shape が一致しない場合は [`ReplayError::ShapeMismatch`]．
+/// If any transition in the batch has `policy = None`, the returned
+/// `policies` is `None`. Shape mismatches yield
+/// [`ReplayError::ShapeMismatch`].
 pub(crate) fn stack_transitions(refs: &[&Transition]) -> Result<StackedBatch, ReplayError> {
     if refs.is_empty() {
         return Err(ReplayError::Empty);

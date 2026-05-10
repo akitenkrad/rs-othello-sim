@@ -1,4 +1,4 @@
-//! `play` サブコマンド: 2 人対戦 ( 標準入出力)．
+//! `play` subcommand: two-player match over stdin/stdout.
 
 use crate::commands::{format_move, render_board};
 use anyhow::{Context, Result};
@@ -7,15 +7,15 @@ use othello_core::{BoardSize, GameState, Move};
 use othello_player::human::parse_coord;
 use std::io::{BufRead, BufReader, Write};
 
-/// `othello-cli play` の引数．
+/// Arguments for `othello-cli play`.
 #[derive(Debug, ClapArgs)]
 pub struct Args {
-    /// 盤面サイズ ( 4..=26)．
+    /// Board size (4..=26).
     #[arg(long, default_value_t = 8)]
     pub board_size: u8,
 }
 
-/// `play` 実行関数．標準入力 ( stdin) からの対話で 2 人対戦を進める．
+/// Entry point for `play`. Drives a two-player match interactively via stdin.
 pub fn run(args: Args) -> Result<()> {
     let size = BoardSize::square(args.board_size);
     let mut state =

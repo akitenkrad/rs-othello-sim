@@ -1,43 +1,43 @@
-//! NN 関連のエラー型．
+//! Errors raised by the NN evaluator.
 
 use std::path::PathBuf;
 use thiserror::Error;
 
-/// NN 評価器が返し得るエラー．
+/// Errors that the NN evaluator can return.
 #[derive(Debug, Error)]
 pub enum NnError {
-    /// 重みファイルの I/O 失敗 ( ファイル不在等)．
+    /// Weight-file I/O failure (e.g. file not found).
     #[error("failed to load weights from {path}: {source}")]
     Io {
-        /// 失敗したパス．
+        /// Path that failed to load.
         path: PathBuf,
-        /// 元の I/O エラー．
+        /// Underlying I/O error.
         #[source]
         source: std::io::Error,
     },
 
-    /// Candle 内部のエラー ( shape 不整合等)．
+    /// Candle internal error (e.g. shape mismatch).
     #[error("candle error: {0}")]
     Candle(String),
 
-    /// ONNX 解析失敗．
+    /// ONNX parse failure.
     #[error("onnx error: {0}")]
     Onnx(String),
 
-    /// 期待していた入力 shape と異なる．
+    /// Input tensor shape differs from what was expected.
     #[error("input shape mismatch: expected {expected:?}, got {actual:?}")]
     ShapeMismatch {
-        /// 期待 shape．
+        /// Expected shape.
         expected: Vec<usize>,
-        /// 実際の shape．
+        /// Actual shape.
         actual: Vec<usize>,
     },
 
-    /// 出力 shape が想定外．
+    /// Unexpected output shape.
     #[error("output shape mismatch: {0}")]
     OutputShape(String),
 
-    /// モデル設定の不整合．
+    /// Invalid model configuration.
     #[error("invalid configuration: {0}")]
     InvalidConfig(String),
 }

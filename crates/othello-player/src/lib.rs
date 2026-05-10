@@ -1,15 +1,19 @@
 //! # othello-player
 //!
-//! Othello プレイヤー戦略の [`Player`] trait と標準実装を提供する．
+//! [`Player`] trait and standard implementations of Othello playing
+//! strategies.
 //!
-//! ## 提供実装
+//! ## Provided implementations
 //!
-//! - [`HumanPlayer`] — 標準入力 ( または任意の `Read`) から座標文字列を読み取る
-//! - [`RandomPlayer`] — `ChaCha8Rng` で合法手から一様サンプル
-//! - [`GreedyPlayer`] — 着手後の自分の石数を最大化する手を選ぶ
-//! - [`MctsPlayer`] — UCT に基づく MCTS ( Phase 4)
+//! - [`HumanPlayer`] — Reads coordinate strings from stdin (or any
+//!   `Read`).
+//! - [`RandomPlayer`] — Samples uniformly from legal moves using
+//!   `ChaCha8Rng`.
+//! - [`GreedyPlayer`] — Picks the move that maximizes the player's stone
+//!   count after placing.
+//! - [`MctsPlayer`] — UCT-based MCTS (Phase 4).
 //!
-//! ## 例
+//! ## Example
 //!
 //! ```
 //! use othello_core::prelude::*;
@@ -38,7 +42,7 @@ pub use traits::{Evaluator, Player, PlayerError};
 pub mod external;
 pub use external::{ExternalEngineConfig, ExternalEnginePlayer, Protocol};
 
-/// よく使う型を一括で導入するための prelude．
+/// Prelude that imports the commonly used types in one go.
 pub mod prelude {
     pub use crate::{
         Evaluator, GreedyPlayer, HumanPlayer, MctsConfig, MctsPlayer, Player, PlayerError,

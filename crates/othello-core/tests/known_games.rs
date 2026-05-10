@@ -1,10 +1,12 @@
-//! 既知の手順を再生して結果を検証する統合テスト．
+//! Integration tests that replay known move sequences and check the
+//! resulting state.
 
 use othello_core::prelude::*;
 
-/// 標準 8×8 で序盤数手を進める．
+/// Plays a few opening moves on the standard 8x8 board.
 ///
-/// 黒が (2,3)，白が (2,2)，黒が (3,2)，白が (4,2) の単純な進行を確認する．
+/// Verifies a simple progression: Black (2,3), White (2,2), Black (3,2),
+/// White (4,2).
 #[test]
 fn opening_diagonal_4_moves() {
     let mut state = GameState::standard_8x8();
@@ -32,7 +34,8 @@ fn opening_diagonal_4_moves() {
     assert!(!state.is_terminal());
 }
 
-/// パスのみ可能 → 最終的に終局という流れの確認．
+/// Verifies the flow where only passes are possible, leading to
+/// termination.
 #[test]
 fn forced_pass_then_terminal() {
     // 全マス黒石にして両者 Pass しか取れない局面を作る
@@ -58,7 +61,7 @@ fn forced_pass_then_terminal() {
     assert_eq!(result.white, 0);
 }
 
-/// 8×8 で完全にランダム再生を 1 局通す ( クラッシュなし)．
+/// Plays one full random game on the 8x8 board (must not panic).
 #[test]
 fn full_random_game_8x8_no_panic() {
     use rand::SeedableRng;
@@ -88,7 +91,7 @@ fn full_random_game_8x8_no_panic() {
     assert!(result.black + result.white <= 64);
 }
 
-/// 4×4 ミニ盤面で完全ランダム再生 ( 最終的に必ず終局)．
+/// Plays one full random game on the mini 4x4 board (always terminates).
 #[test]
 fn full_random_game_4x4_no_panic() {
     use rand::SeedableRng;
@@ -111,7 +114,7 @@ fn full_random_game_4x4_no_panic() {
     assert!(state.is_terminal());
 }
 
-/// 16×16 でも同様にランダム再生がクラッシュしない．
+/// Random play also does not panic on a 16x16 board.
 #[test]
 fn full_random_game_16x16_no_panic() {
     use rand::SeedableRng;

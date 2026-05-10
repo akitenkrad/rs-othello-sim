@@ -1,27 +1,27 @@
-//! [`IoError`]: othello-io の入出力エラー．
+//! [`IoError`]: I/O error for `othello-io`.
 
 use thiserror::Error;
 
-/// 棋譜の読み書き中に発生するエラー．
+/// Error raised while reading or writing game records.
 #[derive(Debug, Error)]
 pub enum IoError {
-    /// 標準入出力エラー．
+    /// Standard I/O error.
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 
-    /// JSON シリアライズ/デシリアライズエラー．
+    /// JSON (de)serialization error.
     #[error("json error: {0}")]
     Json(#[from] serde_json::Error),
 
-    /// 棋譜フォーマットの解析失敗．
+    /// Failed to parse the game-record format.
     #[error("parse error: {0}")]
     Parse(String),
 
-    /// スキーマバージョン不一致．
+    /// Schema version mismatch.
     #[error("unsupported schema version: {0}")]
     UnsupportedSchemaVersion(String),
 
-    /// その他．
+    /// Other errors.
     #[error("io error: {0}")]
     Other(String),
 }

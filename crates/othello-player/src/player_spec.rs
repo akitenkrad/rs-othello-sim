@@ -1,6 +1,7 @@
-//! プレイヤー指定 SPEC のパース．設計書 §5.3 の文法に対応する．
+//! Parser for player SPEC strings. Matches the grammar in §5.3 of the
+//! design document.
 //!
-//! ## 文法
+//! ## Grammar
 //!
 //! ```text
 //! random[:seed=N]
@@ -11,23 +12,27 @@
 //! nn:onnx:PATH[,temperature=F][,deterministic][,seed=N]
 //! ```
 //!
-//! - `mcts:N` は `simulations=N` の MCTS を指定する．
-//! - `c=F` は UCT 定数 ( デフォルト $\sqrt{2}$)．
-//! - `seed=M` は乱数 seed ( 省略時は OS 乱数)．
-//! - `depth=D` はロールアウトの最大深さ ( デフォルト 200)．
-//! - `external:PATH` は外部エンジンプロセス．`protocol` は `gtp`( デフォルト) / `ntest`．
-//!   `arg=VAL` は複数指定で順番にコマンドライン引数になる．
-//!   `timeout` は 1 手あたりの秒数 ( デフォルト 30)．
-//! - `nn:safetensors:PATH` / `nn:onnx:PATH` は NN ベース評価器 (Phase 6.4)．構築には
-//!   `othello-nn` クレートが必要なため，本クレートではパースのみを担当し，実際の
-//!   `Box<dyn Player>` 構築は `othello-cli::player_spec_with_nn::build_player` で行う．
-//!   - `temperature=F` は softmax 温度 ( デフォルト 1.0)．
-//!   - `deterministic` を指定すると argmax 選択 ( 値なし bool)．
-//!   - `seed=N` で乱数 seed を固定する ( 再現性)．
+//! - `mcts:N` selects MCTS with `simulations=N`.
+//! - `c=F` is the UCT exploration constant (default $\sqrt{2}$).
+//! - `seed=M` is the random seed (defaults to OS randomness when
+//!   omitted).
+//! - `depth=D` is the maximum rollout depth (default 200).
+//! - `external:PATH` runs an external engine process. `protocol` is
+//!   `gtp` (default) or `ntest`. Multiple `arg=VAL` are passed as
+//!   command-line arguments in order. `timeout` is per-move seconds
+//!   (default 30).
+//! - `nn:safetensors:PATH` / `nn:onnx:PATH` selects an NN-based
+//!   evaluator (Phase 6.4). Construction requires the `othello-nn`
+//!   crate, so this crate only parses the SPEC; the actual
+//!   `Box<dyn Player>` is built by
+//!   `othello-cli::player_spec_with_nn::build_player`.
+//!   - `temperature=F` is the softmax temperature (default 1.0).
+//!   - `deterministic` switches to argmax selection (no value).
+//!   - `seed=N` fixes the random seed for reproducibility.
 //!
-//! ## 例
+//! ## Examples
 //!
-//! - `random` ( seed = 0)
+//! - `random` (seed = 0)
 //! - `random:seed=42`
 //! - `greedy`
 //! - `mcts:1000`
@@ -47,42 +52,43 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// SPEC のパースエラー．
+/// SPEC parse error.
 #[derive(Debug, thiserror::Error)]
 pub enum SpecError {
-    /// 空文字列など，フォーマットそのものが破綻している．
+    /// The format itself is broken (e.g. empty string).
     #[error("invalid player spec: {0}")]
     Format(String),
-    /// パラメータの値が不正．
+    /// Invalid parameter value.
     #[error("invalid parameter {key}={value}: {reason}")]
     InvalidParam {
-        /// パラメータキー．
+        /// Parameter key.
         key: String,
-        /// 値．
+        /// Parameter value.
         value: String,
-        /// 詳細．
+        /// Details.
         reason: String,
     },
-    /// 認識できない種別．
+    /// Unsupported player kind.
     #[error("unsupported player kind: {0:?}")]
     UnsupportedKind(String),
-    /// `nn:...` の構築は本クレートの責務外．呼び出し側 ( `othello-cli`) で
-    /// `othello-nn` を使って構築すること．
+    /// Building an `nn:...` player is outside this crate's scope. The
+    /// caller (e.g. `othello-cli`) is expected to build it via
+    /// `othello-nn`.
     #[error("nn player requires the `othello-nn` backend; use `othello-cli` build_player")]
     NeedsNnBackend,
 }
 
-/// NN 評価器のバックエンド種別．
+/// Backend type of the NN evaluator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NnBackend {
-    /// Candle ネイティブの safetensors ファイル．
+    /// Candle-native safetensors file.
     Safetensors,
-    /// ONNX ファイル．
+    /// ONNX file.
     Onnx,
 }
 
 impl NnBackend {
-    /// 文字列表記．
+    /// String representation.
     #[inline]
     #[must_use]
     pub const fn as_str(&self) -> &'static str {
@@ -93,76 +99,78 @@ impl NnBackend {
     }
 }
 
-/// `nn:safetensors:PATH[,...]` / `nn:onnx:PATH[,...]` の SPEC パース結果．
+/// Parse result for `nn:safetensors:PATH[,...]` / `nn:onnx:PATH[,...]`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct NnSpec {
-    /// バックエンド種別．
+    /// Backend type.
     pub backend: NnBackend,
-    /// 重みファイルのパス．
+    /// Path to the weights file.
     pub path: PathBuf,
-    /// softmax 温度 ( `None` で 1.0)．
+    /// Softmax temperature (`None` defaults to 1.0).
     pub temperature: Option<f32>,
-    /// argmax 選択にする場合 true．
+    /// `true` to switch to argmax selection.
     pub deterministic: bool,
-    /// 乱数 seed．
+    /// Random seed.
     pub seed: Option<u64>,
 }
 
-/// プレイヤー仕様 ( パース結果)．
+/// Player specification (parse result).
 #[derive(Debug, Clone, PartialEq)]
 pub enum PlayerSpec {
     /// `random[:seed=N]`
     Random {
-        /// 乱数 seed．
+        /// Random seed.
         seed: u64,
     },
     /// `greedy`
     Greedy,
     /// `mcts:N[,c=F][,seed=M][,depth=D]`
     Mcts {
-        /// シミュレーション回数．
+        /// Number of simulations.
         simulations: u32,
-        /// UCT 定数 $c$．
+        /// UCT exploration constant $c$.
         exploration: f64,
-        /// 乱数 seed ( `None` なら OS 乱数)．
+        /// Random seed (`None` derives from OS randomness).
         seed: Option<u64>,
-        /// ロールアウト最大深さ．
+        /// Maximum rollout depth.
         max_rollout_depth: u32,
     },
     /// `external:PATH[,protocol=gtp|ntest][,timeout=SEC][,arg=VAL,...]`
     External {
-        /// 実行ファイルパス．
+        /// Path to the executable.
         command: PathBuf,
-        /// 通信プロトコル．
+        /// Communication protocol.
         protocol: Protocol,
-        /// 1 手あたりタイムアウト ( 秒)．
+        /// Per-move timeout in seconds.
         timeout_secs: u64,
-        /// 起動引数．
+        /// Launch arguments.
         args: Vec<String>,
     },
-    /// `nn:safetensors:PATH[,...]` / `nn:onnx:PATH[,...]` ( Phase 6.4)．
+    /// `nn:safetensors:PATH[,...]` / `nn:onnx:PATH[,...]` (Phase 6.4).
     ///
-    /// 実際の `Box<dyn Player>` への変換は `othello-cli` の wrapper で行う ( 本クレートは
-    /// Candle に依存しないため [`PlayerSpec::build_player`] は [`SpecError::NeedsNnBackend`]
-    /// を返すだけ)．
+    /// The actual conversion to a `Box<dyn Player>` is handled by the
+    /// `othello-cli` wrapper. This crate avoids a Candle dependency, so
+    /// [`PlayerSpec::build_player`] returns
+    /// [`SpecError::NeedsNnBackend`] for this variant.
     Nn(NnSpec),
 }
 
 impl PlayerSpec {
-    /// SPEC を `Box<dyn Player>` に変換する ( 既存 API)．
+    /// Converts the SPEC into a `Box<dyn Player>` (legacy API).
     ///
-    /// **注意**: `Nn` バリアントに対しては panic する．`Nn` を扱う場合は
-    /// `othello-cli` の `player_spec_with_nn::build_player` を経由するか，
-    /// [`PlayerSpec::try_build_player`] を使うこと．
+    /// **Note**: panics for the `Nn` variant. To handle `Nn`, call
+    /// `othello-cli::player_spec_with_nn::build_player` or use
+    /// [`PlayerSpec::try_build_player`] instead.
     #[must_use]
     pub fn build_player(&self, color: Color) -> Box<dyn Player> {
         build_player(self, color)
     }
 
-    /// SPEC を `Box<dyn Player>` に変換する ( fallible 版)．
+    /// Converts the SPEC into a `Box<dyn Player>` (fallible version).
     ///
-    /// `Nn` バリアントには本クレートでは対応できないため [`SpecError::NeedsNnBackend`]
-    /// を返す．`othello-nn` を import している呼び出し側が対応する．
+    /// Returns [`SpecError::NeedsNnBackend`] for the `Nn` variant since
+    /// this crate cannot construct it. The caller (which depends on
+    /// `othello-nn`) handles the variant.
     pub fn try_build_player(&self, color: Color) -> Result<Box<dyn Player>, SpecError> {
         match self {
             PlayerSpec::Nn(_) => Err(SpecError::NeedsNnBackend),
@@ -171,12 +179,15 @@ impl PlayerSpec {
     }
 }
 
-/// `<KIND>[:k=v[,k=v]*]` または `<KIND>:N[,k=v]*` の形式をパースする．
+/// Parses a SPEC in the form `<KIND>[:k=v[,k=v]*]` or
+/// `<KIND>:N[,k=v]*`.
 ///
-/// `mcts:N[,...]` のように先頭が数値の場合は `simulations=N` として扱う．
-/// `external:PATH[,...]` のように先頭がパス文字列の場合は `command=PATH` として扱う．
-/// `nn:safetensors:PATH[,...]` / `nn:onnx:PATH[,...]` は `nn:` を最初に剥がしてから
-/// バックエンド種別 + パス + オプションをパースする．
+/// When the head after `:` is numeric (e.g. `mcts:N[,...]`), it is
+/// treated as `simulations=N`. When the head is a path (e.g.
+/// `external:PATH[,...]`), it is treated as `command=PATH`.
+///
+/// `nn:safetensors:PATH[,...]` and `nn:onnx:PATH[,...]` strip the leading
+/// `nn:` first and then parse the backend, path, and options.
 pub fn parse_player_spec(input: &str) -> Result<PlayerSpec, SpecError> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
@@ -316,7 +327,8 @@ fn parse_optional_u64(
     }
 }
 
-/// `nn:` を剥がした残り ( 例: `safetensors:./model.safetensors,deterministic`) をパースする．
+/// Parses the remainder after stripping the `nn:` prefix
+/// (e.g. `safetensors:./model.safetensors,deterministic`).
 fn parse_nn_spec(rest: &str) -> Result<PlayerSpec, SpecError> {
     // 残りは `<backend>:<path>[,k=v|flag]*` の形．backend 名は `safetensors` か `onnx`．
     let (backend_str, after_backend) = rest.split_once(':').ok_or_else(|| {
@@ -403,11 +415,11 @@ fn parse_nn_spec(rest: &str) -> Result<PlayerSpec, SpecError> {
     }))
 }
 
-/// `PlayerSpec` から `Box<dyn Player>` を生成する．
+/// Builds a `Box<dyn Player>` from a `PlayerSpec`.
 ///
-/// **注意**: `Nn` バリアントを渡すと panic する．`Nn` を扱う場合は
-/// `othello-cli::player_spec_with_nn::build_player` を経由するか，
-/// [`PlayerSpec::try_build_player`] を使うこと．
+/// **Note**: panics for the `Nn` variant. To handle `Nn`, use
+/// `othello-cli::player_spec_with_nn::build_player` or
+/// [`PlayerSpec::try_build_player`].
 #[must_use]
 pub fn build_player(spec: &PlayerSpec, color: Color) -> Box<dyn Player> {
     match spec {
@@ -454,7 +466,7 @@ pub fn build_player(spec: &PlayerSpec, color: Color) -> Box<dyn Player> {
     }
 }
 
-/// `PlayerSpec` の表示名 ( `name()` の値)．
+/// Display name of the `PlayerSpec` (the value returned by `name()`).
 #[must_use]
 pub fn spec_name(spec: &PlayerSpec) -> &'static str {
     match spec {
@@ -466,9 +478,11 @@ pub fn spec_name(spec: &PlayerSpec) -> &'static str {
     }
 }
 
-/// `PlayerSpec` を JSON value に変換 ( `PlayerInfo.params` に格納する)．
+/// Converts a `PlayerSpec` into a JSON value to embed in
+/// `PlayerInfo.params`.
 ///
-/// `serde_json::Value` を返す．依存を増やさないため `serde_json::json!` ではなく手で構築する．
+/// Returns a `serde_json::Value`. Built up manually rather than via
+/// `serde_json::json!` to avoid pulling in extra dependencies.
 #[must_use]
 pub fn spec_params(spec: &PlayerSpec) -> serde_json::Value {
     match spec {

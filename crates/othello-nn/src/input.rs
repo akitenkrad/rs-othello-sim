@@ -1,17 +1,20 @@
-//! [`GameState`] → Candle [`Tensor`] への変換．
+//! [`GameState`] -> Candle [`Tensor`] conversion.
 //!
-//! 3 channel ( own / opp / legal mask) は [`othello_rl::Observation::Planes`] と同じ
-//! レイアウトを使う．本モジュールでは ndarray ↔ Tensor の橋渡しを担う．
+//! Uses the same three-channel layout (own / opp / legal mask) as
+//! [`othello_rl::Observation::Planes`]. This module bridges ndarray
+//! into Candle's `Tensor`.
 
 use crate::error::NnError;
 use candle_core::{DType, Device, Tensor};
 use othello_core::{Color, GameState};
 use othello_rl::{Observation, ObservationType, make_observation};
 
-/// `state` を `view_color` 視点の `(1, 3, H, W)` テンソルに変換する．
+/// Converts `state` into a `(1, 3, H, W)` tensor from `view_color`'s
+/// perspective.
 ///
-/// チャネルは順に own / opp / legal-mask．[`othello_rl::make_observation`] の Planes 表現を
-/// そのまま Tensor に流し込んでいるため，OthelloEnv で学習したモデルとの整合性が取れる．
+/// Channels in order: own / opp / legal-mask. The Planes representation
+/// from [`othello_rl::make_observation`] is fed in directly, so the
+/// tensor layout matches what models trained on `OthelloEnv` expect.
 pub fn state_to_tensor(
     state: &GameState,
     view_color: Color,

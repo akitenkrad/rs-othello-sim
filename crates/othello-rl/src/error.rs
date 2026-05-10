@@ -1,48 +1,49 @@
-//! [`RlError`]: 強化学習環境のエラー型．
+//! [`RlError`]: error type for the RL environments.
 
 use othello_core::OthelloError;
 use othello_player::PlayerError;
 use thiserror::Error;
 
-/// 強化学習環境で発生し得るエラー．
+/// Errors that may occur in the RL environments.
 #[derive(Debug, Error)]
 pub enum RlError {
-    /// `step` に渡された Action が現局面で合法でない．
+    /// The action passed to `step` is illegal in the current state.
     #[error("illegal action: {action} (legal_count={legal_count})")]
     IllegalAction {
-        /// Action インデックス．
+        /// Action index.
         action: u32,
-        /// 当該局面での合法手数．
+        /// Number of legal moves in the state.
         legal_count: u32,
     },
 
-    /// Action 値が範囲外 ( 0..space_size 外)．
+    /// Action index is outside `0..space_size`.
     #[error("action {action} out of range (max {max})")]
     OutOfRange {
-        /// 与えられた Action．
+        /// Provided action.
         action: u32,
-        /// 許容上限 ( 含まない)．
+        /// Exclusive upper bound.
         max: u32,
     },
 
-    /// 手番がエージェントでない局面で `step` が呼ばれた ( マルチエージェント環境で軽い safety)．
+    /// `step` was called when it is not the agent's turn (a light
+    /// safety check for the multi-agent environment).
     #[error("not your turn: side_to_move={side:?}, agent={agent:?}")]
     NotYourTurn {
-        /// 現手番．
+        /// Current side to move.
         side: othello_core::Color,
-        /// エージェント色．
+        /// Agent color.
         agent: othello_core::Color,
     },
 
-    /// コア層のエラー．
+    /// Core-layer error.
     #[error("core error: {0}")]
     Core(#[from] OthelloError),
 
-    /// プレイヤー ( opponent) 側のエラー．
+    /// Error from the opponent player.
     #[error("player error: {0}")]
     Player(#[from] PlayerError),
 
-    /// その他．
+    /// Other errors.
     #[error("rl error: {0}")]
     Other(String),
 }

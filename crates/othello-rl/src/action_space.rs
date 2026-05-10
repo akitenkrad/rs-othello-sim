@@ -1,19 +1,21 @@
-//! [`Action`] 空間と Move ↔ Action の相互変換．
+//! [`Action`] space and conversion between `Move` and `Action`.
 //!
-//! Action 空間サイズは `H * W + 1` ( 最後の 1 は Pass)．
+//! The action space has size `H * W + 1`, where the final entry encodes
+//! `Pass`.
 
 use crate::error::RlError;
 use othello_core::{BoardSize, Coord, Move};
 use serde::{Deserialize, Serialize};
 
-/// 強化学習エージェントの行動 ( 離散値)．
+/// Discrete action of a reinforcement-learning agent.
 ///
-/// `0..H*W` は盤面上のセル ( `index = row * cols + col`)，`H*W` は Pass を表す．
+/// `0..H*W` indexes a cell on the board (`index = row * cols + col`); the
+/// value `H*W` represents `Pass`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Action(pub u32);
 
 impl Action {
-    /// 指定 `Move` を `Action` に変換する．
+    /// Converts the given `Move` into an `Action`.
     #[must_use]
     pub fn from_move(mv: Move, size: BoardSize) -> Self {
         match mv {
@@ -22,7 +24,8 @@ impl Action {
         }
     }
 
-    /// Action を `Move` に変換する．`size` を超える index は `Move::Pass` 扱い．
+    /// Converts the action into a `Move`. Indices beyond `size` are treated
+    /// as `Move::Pass`.
     #[must_use]
     pub fn to_move(self, size: BoardSize) -> Move {
         let board_cells = size.rows as u32 * size.cols as u32;
@@ -35,21 +38,22 @@ impl Action {
         }
     }
 
-    /// Pass の Action 値を返す．
+    /// Returns the action value representing `Pass`.
     #[inline]
     #[must_use]
     pub fn pass(size: BoardSize) -> Self {
         Self(size.rows as u32 * size.cols as u32)
     }
 
-    /// Action 空間サイズ ( `H * W + 1`)．
+    /// Returns the action-space size (`H * W + 1`).
     #[inline]
     #[must_use]
     pub fn space_size(size: BoardSize) -> u32 {
         size.rows as u32 * size.cols as u32 + 1
     }
 
-    /// 範囲チェック．不正なら [`RlError::OutOfRange`]．
+    /// Range-checks the action, returning [`RlError::OutOfRange`] when
+    /// invalid.
     pub fn validate(self, size: BoardSize) -> Result<(), RlError> {
         let max = Self::space_size(size);
         if self.0 >= max {

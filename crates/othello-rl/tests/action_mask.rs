@@ -1,4 +1,4 @@
-//! Action mask の網羅テスト．
+//! Comprehensive tests for action masks.
 
 use othello_core::{BoardSize, Color, GameState};
 use othello_player::RandomPlayer;

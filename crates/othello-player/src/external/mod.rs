@@ -1,13 +1,16 @@
-//! 外部プロセスエンジン ( Edax / Egaroucid 等) と連携するプレイヤー実装．
+//! Player implementation that talks to an external engine process
+//! (Edax, Egaroucid, etc.).
 //!
-//! 設計書 §3.2.2 を Phase 5 で実装したもの．
+//! Implements §3.2.2 of the design document, completed in Phase 5.
 //!
-//! - [`Protocol::Gtp`] ( デフォルト) と [`Protocol::Ntest`] の 2 種類をサポート
-//! - 同期 IO ( `std::process::Command` + `BufReader`) で実装し，`tokio` 等の依存は持たない
-//! - 1 手あたりタイムアウトは別スレッド + channel でソフトに実装
-//! - `Drop` でプロセスを `quit` → kill する
+//! - Supports [`Protocol::Gtp`] (default) and [`Protocol::Ntest`].
+//! - Uses synchronous I/O (`std::process::Command` + `BufReader`); no
+//!   `tokio` dependency.
+//! - The per-move timeout is implemented softly with a separate thread
+//!   plus a channel.
+//! - `Drop` sends `quit` to the engine and then kills the process.
 //!
-//! ## 例
+//! ## Example
 //!
 //! ```ignore
 //! use othello_player::{ExternalEngineConfig, ExternalEnginePlayer, Protocol, Player};
@@ -46,27 +49,27 @@ pub use gtp::GtpProtocol;
 pub use ntest::NtestProtocol;
 pub use protocol::{EngineProtocol, Protocol};
 
-/// 外部エンジンプレイヤーの設定．
+/// Configuration for the external-engine player.
 #[derive(Debug, Clone)]
 pub struct ExternalEngineConfig {
-    /// 実行ファイルパス．
+    /// Path to the executable.
     pub command: PathBuf,
-    /// 起動時引数．
+    /// Launch arguments.
     pub args: Vec<String>,
-    /// 通信プロトコル．
+    /// Communication protocol.
     pub protocol: Protocol,
-    /// 盤面サイズ ( `boardsize` 等で通知)．
+    /// Board size (announced via `boardsize` etc.).
     pub board_size: BoardSize,
-    /// 1 手あたりタイムアウト ( デフォルト 30 秒)．
+    /// Per-move timeout (default 30 seconds).
     pub timeout: Duration,
-    /// 起動時のカレントディレクトリ．
+    /// Working directory to launch the process in.
     pub working_dir: Option<PathBuf>,
-    /// 追加環境変数．
+    /// Additional environment variables.
     pub env: Vec<(String, String)>,
 }
 
 impl ExternalEngineConfig {
-    /// 必須項目のみで設定を構築する ( 他はデフォルト)．
+    /// Builds a config from the required fields, defaulting the rest.
     #[must_use]
     pub fn new(command: PathBuf, protocol: Protocol, board_size: BoardSize) -> Self {
         Self {
@@ -81,21 +84,23 @@ impl ExternalEngineConfig {
     }
 }
 
-/// 外部エンジンプレイヤー．
+/// External-engine player.
 ///
-/// プロセスは `select_move` 初回呼び出し時に起動される ( 遅延起動)．
-/// `reset` で `clear_board` を再送出してゲーム継続使用が可能．
-/// `Drop` で `quit` 送信 + プロセス kill．
+/// The process is spawned lazily on the first call to `select_move`.
+/// Calling `reset` re-issues `clear_board`, allowing the same process to
+/// be reused for subsequent games. `Drop` sends `quit` and then kills
+/// the process.
 pub struct ExternalEnginePlayer {
     config: ExternalEngineConfig,
     color: Color,
     name: String,
     process: Option<EngineProcess>,
-    /// engine が `play` 通知を受けた最後の手数 ( history 同期用)．
+    /// Last move number at which the engine received a `play`
+    /// notification (used to keep history in sync).
     last_known_move_number: u32,
 }
 
-/// 起動済みプロセス + IO ハンドル．
+/// Spawned process plus its IO handles.
 struct EngineProcess {
     child: Child,
     stdin: ChildStdin,
@@ -105,7 +110,8 @@ struct EngineProcess {
 }
 
 impl ExternalEnginePlayer {
-    /// 設定からプレイヤーを生成する．プロセスは未起動．
+    /// Builds a player from the given configuration. The process is not
+    /// started yet.
     #[must_use]
     pub fn new(color: Color, config: ExternalEngineConfig) -> Self {
         let name = format!(
@@ -126,14 +132,14 @@ impl ExternalEnginePlayer {
         }
     }
 
-    /// 表示名を変更する ( builder)．
+    /// Builder: changes the display name.
     #[must_use]
     pub fn name_with(mut self, name: impl Into<String>) -> Self {
         self.name = name.into();
         self
     }
 
-    /// 設定参照．
+    /// Returns a reference to the configuration.
     #[must_use]
     pub fn config(&self) -> &ExternalEngineConfig {
         &self.config
@@ -180,7 +186,8 @@ impl ExternalEnginePlayer {
         Ok(())
     }
 
-    /// プロセスを終了する ( `quit` 送信 + kill)．エラーは無視．
+    /// Shuts down the process (sends `quit`, then kills it). Errors are
+    /// ignored.
     fn shutdown(&mut self) {
         if let Some(mut proc) = self.process.take() {
             let _ = proc.protocol.quit(&mut proc.stdin);
@@ -294,11 +301,12 @@ impl Player for ExternalEnginePlayer {
     }
 }
 
-/// クロージャをタイムアウト付きで実行する ( 別スレッド + channel)．
+/// Runs a closure with a timeout (uses a separate thread plus a channel).
 ///
-/// クロージャが `T` を返したら `Ok(T)`，タイムアウトしたら `PlayerError::Other`．
-/// 注意: タイムアウト時はワーカースレッドはバックグラウンドで継続する ( IO 待ちで止まる)．
-/// プロセス kill により後続 IO は EOF になるので，最終的にスレッドは終了する．
+/// Returns `Ok(T)` if the closure returns `T`, or `PlayerError::Other` on
+/// timeout. Note: on timeout the worker thread keeps running in the
+/// background (blocked on IO). Killing the process will cause subsequent
+/// IO to hit EOF, allowing the thread to finish eventually.
 fn run_with_timeout<F, T>(timeout: Duration, f: F) -> Result<T, PlayerError>
 where
     F: FnOnce() -> Result<T, PlayerError> + Send,

@@ -1,10 +1,10 @@
-//! Play モード ( Human vs Human) のロジック．
+//! Play mode (Human vs Human) logic.
 
 use crate::app::{AppState, Cursor, format_move_history};
 use crate::input::Action;
 use othello_core::{BoardSize, Color, GameState, Move, OthelloError};
 
-/// Play モード状態．
+/// Play mode state.
 #[derive(Debug)]
 pub struct PlayMode {
     state: GameState,
@@ -15,7 +15,7 @@ pub struct PlayMode {
 }
 
 impl PlayMode {
-    /// 標準初期局面で Play モードを開始する．
+    /// Starts Play mode from the standard initial position.
     pub fn new(board_size: BoardSize) -> Result<Self, OthelloError> {
         let state = GameState::standard(board_size)?;
         let cursor = Cursor::center(&state);
@@ -29,7 +29,7 @@ impl PlayMode {
         })
     }
 
-    /// アクションを 1 つ処理する．
+    /// Handles a single action.
     pub fn handle(&mut self, action: Action) {
         if self.finished {
             return;
@@ -64,7 +64,7 @@ impl PlayMode {
         }
     }
 
-    /// 着手を試みる．成功時 `true`，失敗時 `false`．
+    /// Attempts to place a stone. Returns `true` on success, `false` on failure.
     fn try_place(&mut self) -> bool {
         let coord = self.cursor.as_coord();
         let mv = Move::Place(coord);
@@ -81,7 +81,7 @@ impl PlayMode {
         }
     }
 
-    /// パスを試みる．成功時 `true`，失敗時 `false`．
+    /// Attempts to pass. Returns `true` on success, `false` on failure.
     fn try_pass(&mut self) -> bool {
         let side = self.state.side_to_move;
         if !self.state.legal_moves().is_empty() {
@@ -100,13 +100,13 @@ impl PlayMode {
         }
     }
 
-    /// 終局しているか．
+    /// Whether the game has ended.
     #[must_use]
     pub fn is_finished(&self) -> bool {
         self.finished
     }
 
-    /// 描画用スナップショットを生成する．
+    /// Builds a snapshot for rendering.
     #[must_use]
     pub fn snapshot(&self) -> AppState {
         let total = self.moves.len();
@@ -125,13 +125,13 @@ impl PlayMode {
         }
     }
 
-    /// テスト用: 現在の `GameState` を借用する．
+    /// Test-only: borrow the current `GameState`.
     #[must_use]
     pub fn state(&self) -> &GameState {
         &self.state
     }
 
-    /// テスト用: カーソル参照．
+    /// Test-only: read the current cursor.
     #[must_use]
     pub fn cursor(&self) -> Cursor {
         self.cursor

@@ -1,16 +1,19 @@
 //! MCTS tree-reuse A/B benchmark (Phase 6.2).
 //!
-//! 同じ `simulations` 数で `tree_reuse=false` ( ベースライン) と `tree_reuse=true` を
-//! 1 ゲーム完走で比較する．Random プレイヤーを相手に固定 seed で 1 局指す．
+//! Compares `tree_reuse = false` (the baseline) and `tree_reuse = true`
+//! over one full game with the same `simulations` count. A single game
+//! is played against a random opponent with a fixed seed.
 //!
-//! 実機ベンチ実行 ( `cargo bench`) は CI に含めない．コンパイル確認は
-//! `cargo bench --no-run -p othello-player` で行う．
+//! The actual benchmark run (`cargo bench`) is not part of CI; the
+//! compile check is performed via
+//! `cargo bench --no-run -p othello-player`.
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use othello_core::prelude::*;
 use othello_player::{MctsConfig, MctsPlayer, Player, RandomPlayer};
 
-/// MCTS ( 黒) vs Random ( 白) で 1 局完走．完了時の合計手数を返す．
+/// Plays one full MCTS (Black) vs Random (White) game and returns the
+/// total number of moves played.
 fn play_one_game(black: &mut MctsPlayer, white: &mut RandomPlayer) -> u32 {
     let mut state = GameState::standard_8x8();
     let mut safety = 200u32;

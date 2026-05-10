@@ -1,18 +1,21 @@
-//! GGF ( Generic Game Format) Othello サブセットの Reader/Writer．
+//! Reader/Writer for the GGF (Generic Game Format) Othello subset.
 //!
-//! 設計書 §4.3 に準拠した最小限の実装．サポートタグ:
-//! - `GM` ( ゲーム種別) — 値が `Othello` 以外なら拒否
-//! - `PC` ( place / source)
-//! - `DT` ( date)
-//! - `PB` / `PW` ( 黒/白プレイヤー名)
-//! - `RE` ( 結果，差点)
-//! - `BO` ( 初期盤面)
-//! - `B[...]` / `W[...]` ( 着手)
+//! Minimal implementation conforming to §4.3 of the design document.
+//! Supported tags:
+//! - `GM` (game kind) — rejects values other than `Othello`.
+//! - `PC` (place / source).
+//! - `DT` (date).
+//! - `PB` / `PW` (black/white player name).
+//! - `RE` (result, score margin).
+//! - `BO` (initial board).
+//! - `B[...]` / `W[...]` (moves).
 //!
-//! 着手は `B[D3]` または `B[D3//1.234]` ( 思考時間付き) の両形式を read．write は時間なしの `B[D3]`．
-//! パスは `B[--]` または `B[PA]` の両形式を read，write は `B[--]`．
+//! Reads moves in either form: `B[D3]` or `B[D3//1.234]` (with think
+//! time). Writes use the no-time form `B[D3]`. Pass is read as either
+//! `B[--]` or `B[PA]` and written as `B[--]`.
 //!
-//! 座標は GGF 仕様: 列 A-H ( 1-indexed) + 行 1-8．内部 `Coord(row, col)` は 0-indexed なので変換する．
+//! GGF coordinates are columns A-H (1-indexed) plus rows 1-8. The
+//! internal `Coord(row, col)` is 0-indexed and is converted accordingly.
 
 use crate::error::IoError;
 use crate::record::{
@@ -24,24 +27,24 @@ use chrono::{FixedOffset, Utc};
 use othello_core::{BoardSize, Color, Coord, Move};
 use std::io::{Read, Write};
 
-/// GGF Reader．
+/// GGF reader.
 #[derive(Debug, Default)]
 pub struct GgfReader;
 
 impl GgfReader {
-    /// 新規生成．
+    /// Constructs a new reader.
     #[must_use]
     pub fn new() -> Self {
         Self
     }
 }
 
-/// GGF Writer．
+/// GGF writer.
 #[derive(Debug, Default)]
 pub struct GgfWriter;
 
 impl GgfWriter {
-    /// 新規生成．
+    /// Constructs a new writer.
     #[must_use]
     pub fn new() -> Self {
         Self
@@ -50,17 +53,18 @@ impl GgfWriter {
 
 // ---- GGF 解析 ----------------------------------------------------------------
 
-/// GGF タグの 1 つ ( `GM[Othello]` のようなペア)．
+/// One GGF tag (a pair such as `GM[Othello]`).
 #[derive(Debug)]
 struct GgfTag {
     name: String,
     value: String,
 }
 
-/// 最小限の GGF パーサ．
+/// Minimal GGF parser.
 ///
-/// 形式は `(;GM[Othello]PB[X]PW[Y]...B[D3]W[C5];)` のような構造で，
-/// タグ名 + `[` + 値 + `]` の繰り返し．`(`, `)`, `;` は構造区切り．
+/// Inputs look like `(;GM[Othello]PB[X]PW[Y]...B[D3]W[C5];)` — a sequence
+/// of tag-name + `[` + value + `]`. `(`, `)`, and `;` are structural
+/// separators.
 fn parse_tags(input: &str) -> Result<Vec<GgfTag>, IoError> {
     let mut tags = Vec::new();
     let bytes = input.as_bytes();
@@ -119,8 +123,8 @@ fn parse_tags(input: &str) -> Result<Vec<GgfTag>, IoError> {
     Ok(tags)
 }
 
-/// `D3` や `D3//1.234` を `Move::Place` に変換する．
-/// `--` または `PA` ( 大小文字無視) は `Move::Pass`．
+/// Converts `D3` or `D3//1.234` into `Move::Place`.
+/// `--` or `PA` (case-insensitive) becomes `Move::Pass`.
 fn parse_ggf_move(value: &str) -> Result<Move, IoError> {
     // 思考時間サフィックスの除去
     let core = value.split("//").next().unwrap_or(value).trim();
@@ -146,7 +150,7 @@ fn parse_ggf_move(value: &str) -> Result<Move, IoError> {
     Ok(Move::Place(Coord::new(row_1 - 1, col)))
 }
 
-/// `Move` を GGF 文字列に変換する．write 側．
+/// Converts a `Move` into a GGF string. Used on the write side.
 fn move_to_ggf(mv: Move) -> String {
     match mv {
         Move::Pass => "--".to_string(),
@@ -157,11 +161,12 @@ fn move_to_ggf(mv: Move) -> String {
     }
 }
 
-/// `BO[8 ...]` の値から盤面サイズを抽出する．
+/// Extracts the board size from a `BO[8 ...]` value.
 ///
-/// `BO[8 ---------------------------O*------*O--------------------------- *]` のように
-/// 「サイズ」+ 空白 + 64 文字の盤面 + 空白 + 手番文字．
-/// 形式が異なる場合は default ( 8×8) を返す．
+/// The expected layout is "size + whitespace + 64 board characters +
+/// whitespace + side-to-move character", e.g.
+/// `BO[8 ---------------------------O*------*O--------------------------- *]`.
+/// Returns the default (8x8) when the format does not match.
 fn parse_board_size(bo_value: &str) -> BoardSize {
     let trimmed = bo_value.trim();
     if let Some((size_str, _)) = trimmed.split_once(char::is_whitespace) {
@@ -174,8 +179,9 @@ fn parse_board_size(bo_value: &str) -> BoardSize {
     BoardSize::STANDARD
 }
 
-/// `RE[+12]` の `+12` から ( winner, margin) を計算する．margin の絶対値が差点．
-/// `?` は不明扱い．
+/// Computes `(winner, margin)` from the `+12` portion of `RE[+12]`. The
+/// absolute value of the margin is the score differential. `?` is treated
+/// as unknown.
 fn parse_result(re_value: &str, total_stones_hint: Option<u32>) -> Option<GameResultRecord> {
     let trimmed = re_value.trim();
     if trimmed.is_empty() || trimmed == "?" {

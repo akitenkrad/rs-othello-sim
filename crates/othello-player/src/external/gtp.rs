@@ -1,7 +1,8 @@
-//! GTP ( Go Text Protocol) 風プロトコルの実装．
+//! Implementation of the GTP-like (Go Text Protocol) protocol.
 //!
-//! 設計書 §3.2.2 の GTP 風通信を Othello 用に簡略化している．
-//! コマンドは 1 行ごとに送り，応答は `= ...\n\n` ( 成功) または `? ...\n\n` ( 失敗)．
+//! Simplifies the GTP-like protocol described in design doc §3.2.2 for
+//! Othello use. Each command is sent on its own line; responses are
+//! `= ...\n\n` (success) or `? ...\n\n` (failure).
 
 use super::protocol::{EngineProtocol, coord_to_gtp, parse_gtp_coord};
 use crate::traits::PlayerError;
@@ -9,12 +10,12 @@ use othello_core::{BoardSize, Color, GameState, Move};
 use std::io::{BufRead, Write};
 use std::time::Duration;
 
-/// GTP プロトコル状態．
+/// State of the GTP protocol.
 #[derive(Debug, Default)]
 pub struct GtpProtocol;
 
 impl GtpProtocol {
-    /// 新規 GTP プロトコルインスタンス．
+    /// Creates a new `GtpProtocol` instance.
     #[must_use]
     pub fn new() -> Self {
         Self
@@ -91,11 +92,13 @@ fn send_command(stdin: &mut dyn Write, line: &str) -> Result<(), PlayerError> {
     Ok(())
 }
 
-/// GTP 応答を読む ( `= body\n\n` 形式)．戻り値は body 部分．
+/// Reads a GTP response (the `= body\n\n` form). Returns the body portion.
 ///
-/// `?` で始まる行はエラーとして `PlayerError::Other` で返す．空行を区切りに使う．
-/// 簡易タイムアウトは [`super::process::read_lines_with_timeout`] 相当を呼び出し側で行う想定．
-/// ここでは BufRead の `read_line` を素直に使い，呼び出し側のスレッド分離タイムアウトに任せる．
+/// Lines starting with `?` are returned as `PlayerError::Other`. An empty
+/// line is used as a delimiter. Lightweight timeouts are expected to be
+/// handled by callers (e.g. via the equivalent of
+/// `super::process::read_lines_with_timeout`); here we use `BufRead`'s
+/// `read_line` directly and rely on the caller's thread-isolated timeout.
 fn read_gtp_response(stdout: &mut dyn BufRead, _timeout: Duration) -> Result<String, PlayerError> {
     // 空行までの全行を集める．先頭行が `=` または `?`．
     let mut first: Option<String> = None;

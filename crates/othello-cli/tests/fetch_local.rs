@@ -1,7 +1,7 @@
-//! `fetch wthor` サブコマンドの integration test．
+//! Integration tests for the `fetch wthor` subcommand.
 //!
-//! 実ネットワークアクセスを避けるため，ローカルに `tiny_http` の HTTP サーバを立てて
-//! `--url-pattern` で向けることでフローを確認する．
+//! To avoid real network access, a local `tiny_http` server is started
+//! and the flow is verified by pointing `--url-pattern` at it.
 
 use std::fs;
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
@@ -13,7 +13,7 @@ use std::time::Duration;
 use tiny_http::{Method, Response, Server};
 use zip::write::SimpleFileOptions;
 
-/// テスト用一時ディレクトリ ( ユニーク名)．
+/// Creates a uniquely named temporary directory for the tests.
 fn temp_dir(label: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!(
         "rs-othello-sim-fetch-{label}-{}-{}",
@@ -27,7 +27,8 @@ fn temp_dir(label: &str) -> PathBuf {
     dir
 }
 
-/// 最小 WTHOR バイト列 ( 16 byte ヘッダ + 68 byte 1 局)．
+/// Builds a minimal WTHOR byte sequence (a 16-byte header plus one
+/// 68-byte game).
 fn make_wthor_bytes() -> Vec<u8> {
     let mut header = [0u8; 16];
     header[4..8].copy_from_slice(&1u32.to_le_bytes()); // n_games
@@ -49,7 +50,8 @@ fn make_wthor_bytes() -> Vec<u8> {
     v
 }
 
-/// `wth_2023.wtb` 1 件を含む zip を in-memory で生成する．
+/// Builds an in-memory zip archive containing a single `wth_2023.wtb`
+/// entry.
 fn make_wtb_zip(file_name: &str) -> Vec<u8> {
     let buf = Cursor::new(Vec::<u8>::new());
     let mut zw = zip::ZipWriter::new(buf);
@@ -64,7 +66,8 @@ fn make_wtb_zip(file_name: &str) -> Vec<u8> {
     out
 }
 
-/// 1 ファイルを返すシンプル HTTP サーバを起動し，`(port, shutdown_handle)` を返す．
+/// Starts a simple HTTP server that returns a single file and yields
+/// `(port, shutdown_handle)`.
 struct LocalServer {
     port: u16,
     shutdown: mpsc::Sender<()>,

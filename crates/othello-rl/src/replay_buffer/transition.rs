@@ -1,71 +1,77 @@
-//! [`Transition`] と [`TransitionBatch`] 型定義．
+//! [`Transition`] and [`TransitionBatch`] type definitions.
 //!
-//! `Transition` は self-play / RL の 1 ステップ分の経験を保持する．
-//! `TransitionBatch` はサンプリング時にまとめて返すバッチ表現．
+//! `Transition` holds a single step of experience for self-play / RL.
+//! `TransitionBatch` is the batched representation returned at sampling
+//! time.
 
 use ndarray::{Array1, Array2, Array3, Array4};
 use othello_core::Color;
 use serde::{Deserialize, Serialize};
 
-/// 1 ステップ分の経験 ( transition)．
+/// A single step of experience (transition).
 ///
-/// - `observation` : Planes 形式の観測テンソル `(3, H, W)`．`own / opp / legal_mask` を含む．
-/// - `action` : `0..H*W+1` の整数 ( 最後が Pass)．
-/// - `policy` : AlphaZero 風の visit-count 分布 ( 任意)．長さ `H*W+1`．
-/// - `value` : 自分視点の終局報酬 ( -1 / 0 / +1) または TD ターゲット．
-/// - `legal_mask` : 観測時点の合法手マスク．長さ `H*W+1`．
-/// - `side` : この transition の手番 ( 観測の視点)．
-/// - `move_number` : ゲーム内での累計手数．
-/// - `game_id` : 由来ゲームの識別子 ( デバッグ用)．
+/// - `observation`: Planes-format observation tensor `(3, H, W)` containing
+///   `own / opp / legal_mask`.
+/// - `action`: integer in `0..H*W+1` (the last index is `Pass`).
+/// - `policy`: optional AlphaZero-style visit-count distribution of length
+///   `H*W+1`.
+/// - `value`: terminal reward from the player's viewpoint (`-1 / 0 / +1`)
+///   or a TD target.
+/// - `legal_mask`: legal-move mask at the time of observation, length
+///   `H*W+1`.
+/// - `side`: side to move at this transition (the observation's viewpoint).
+/// - `move_number`: cumulative move number within the game.
+/// - `game_id`: identifier of the originating game (for debugging).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transition {
-    /// `(3, H, W)` Planes 観測．
+    /// `(3, H, W)` Planes observation.
     pub observation: Array3<f32>,
-    /// 行動インデックス．
+    /// Action index.
     pub action: u32,
-    /// 行動分布ターゲット ( 任意)．
+    /// Optional action-distribution target.
     pub policy: Option<Array1<f32>>,
-    /// 価値ターゲット ( 自分視点)．
+    /// Value target (from the player's viewpoint).
     pub value: f32,
-    /// 観測時点の合法手マスク．
+    /// Legal-move mask at the time of observation.
     pub legal_mask: Array1<bool>,
-    /// 観測の視点プレイヤー．
+    /// Player whose viewpoint the observation uses.
     pub side: Color,
-    /// ゲーム内手数．
+    /// Move number within the game.
     pub move_number: u32,
-    /// 由来ゲームの識別子．
+    /// Identifier of the originating game.
     pub game_id: String,
 }
 
-/// `(B, ...)` バッチ取り出し用の構造．
+/// `(B, ...)` batch-output structure.
 ///
-/// Python 側で numpy として stack して受け取ることを想定する．
+/// Designed to be stacked into NumPy arrays on the Python side.
 #[derive(Debug, Clone)]
 pub struct TransitionBatch {
-    /// `(B, 3, H, W)` の観測テンソル．
+    /// `(B, 3, H, W)` observation tensor.
     pub observations: Array4<f32>,
-    /// `(B,)` の行動インデックス．
+    /// `(B,)` action indices.
     pub actions: Array1<u32>,
-    /// `(B, H*W+1)` の行動分布 ( 任意)．バッチ全件で揃っているときのみ `Some`．
+    /// Optional `(B, H*W+1)` action distributions. `Some` only when every
+    /// transition in the batch carries a policy.
     pub policies: Option<Array2<f32>>,
-    /// `(B,)` の価値ターゲット．
+    /// `(B,)` value targets.
     pub values: Array1<f32>,
-    /// `(B, H*W+1)` の合法手マスク．
+    /// `(B, H*W+1)` legal-move masks.
     pub legal_masks: Array2<bool>,
-    /// PER の優先度更新で使う各 transition の buffer index．
+    /// Buffer index of each transition; used for PER priority updates.
     pub indices: Vec<usize>,
-    /// `(B,)` の importance-sampling weight ( PER のみ)．
+    /// `(B,)` importance-sampling weights (PER only).
     pub weights: Option<Array1<f32>>,
 }
 
 impl TransitionBatch {
-    /// バッチサイズ．
+    /// Returns the batch size.
     #[must_use]
     pub fn len(&self) -> usize {
         self.actions.len()
     }
 
-    /// バッチが空かどうか．
+    /// Returns whether the batch is empty.
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0

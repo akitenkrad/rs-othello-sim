@@ -1,4 +1,4 @@
-//! `observe` サブコマンド: AI 同士の対戦を TUI で観戦する．
+//! `observe` subcommand: watch an AI vs AI match in the TUI.
 
 use crate::player_spec_with_nn::build_with_seed_override;
 use anyhow::{Context, Result};
@@ -6,31 +6,32 @@ use clap::Args as ClapArgs;
 use othello_core::{BoardSize, Color};
 use othello_player::player_spec::{parse_player_spec, spec_name};
 
-/// `othello-cli observe` の引数．
+/// Arguments for `othello-cli observe`.
 #[derive(Debug, ClapArgs)]
 pub struct Args {
-    /// 盤面サイズ．
+    /// Board size.
     #[arg(long, default_value_t = 8)]
     pub board_size: u8,
 
-    /// 黒プレイヤー SPEC．
+    /// Black player SPEC.
     #[arg(long, default_value = "mcts:200")]
     pub black: String,
 
-    /// 白プレイヤー SPEC．
+    /// White player SPEC.
     #[arg(long, default_value = "greedy")]
     pub white: String,
 
-    /// 乱数 seed．
+    /// Random seed.
     #[arg(long)]
     pub seed: Option<u64>,
 
-    /// 自動再生間隔 ( ms)．0 だと手動 ( Space で 1 手進める)．
+    /// Auto-play interval in milliseconds. `0` disables auto-play (advance
+    /// one move at a time with Space).
     #[arg(long, default_value_t = 0u64)]
     pub auto_delay: u64,
 }
 
-/// `observe` 実行関数．
+/// Entry point for `observe`.
 pub fn run(args: Args) -> Result<()> {
     let size = BoardSize::square(args.board_size);
     let black_spec = parse_player_spec(&args.black)

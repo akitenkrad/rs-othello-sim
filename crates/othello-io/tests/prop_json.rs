@@ -1,4 +1,4 @@
-//! JSON ラウンドトリップのプロパティテスト ( 任意 GameRecord)．
+//! Property tests for JSON round-trips over arbitrary `GameRecord`s.
 
 use chrono::{DateTime, FixedOffset};
 use othello_core::{BoardSize, Color, Coord, Move};

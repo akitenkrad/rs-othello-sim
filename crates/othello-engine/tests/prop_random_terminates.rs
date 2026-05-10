@@ -1,4 +1,5 @@
-//! プロパティテスト: 任意 seed で Random vs Random は必ず 200 手以内に終局する．
+//! Property test: for any seed, a Random vs Random game must terminate
+//! within 200 moves.
 
 use othello_core::prelude::*;
 use othello_engine::prelude::*;

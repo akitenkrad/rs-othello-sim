@@ -1,4 +1,4 @@
-//! `simulate` サブコマンド: 1 局のシミュレーション ( random / greedy)．
+//! `simulate` subcommand: simulate a single game (random/greedy/etc.).
 
 use crate::player_spec_with_nn::build_player;
 use anyhow::{Context, Result};
@@ -13,44 +13,44 @@ use std::fs::File;
 use std::io::BufWriter;
 use std::path::PathBuf;
 
-/// 棋譜出力フォーマット．
+/// Game-record output format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum RecordFormat {
-    /// 自前 JSON 形式．
+    /// Native JSON format.
     Json,
-    /// GGF 形式．
+    /// GGF format.
     Ggf,
 }
 
-/// `othello-cli simulate` の引数．
+/// Arguments for `othello-cli simulate`.
 #[derive(Debug, ClapArgs)]
 pub struct Args {
-    /// 盤面サイズ ( 4..=26)．
+    /// Board size (4..=26).
     #[arg(long, default_value_t = 8)]
     pub board_size: u8,
 
-    /// 黒プレイヤー指定 SPEC ( 例 `random:seed=42`，`greedy`)．
+    /// Black player SPEC (e.g. `random:seed=42`, `greedy`).
     #[arg(long, default_value = "random")]
     pub black: String,
 
-    /// 白プレイヤー指定 SPEC．
+    /// White player SPEC.
     #[arg(long, default_value = "random")]
     pub white: String,
 
-    /// 棋譜の保存先ファイル ( 未指定なら保存しない)．
+    /// Output file for the saved game record (omit to skip saving).
     #[arg(long)]
     pub save_record: Option<PathBuf>,
 
-    /// 棋譜のフォーマット．
+    /// Game-record output format.
     #[arg(long, value_enum, default_value_t = RecordFormat::Json)]
     pub record_format: RecordFormat,
 
-    /// JSONL 進行ログの出力先 ( 未指定なら書き出さない)．
+    /// Output path for the JSONL move-by-move log (omit to skip).
     #[arg(long)]
     pub jsonl_log: Option<PathBuf>,
 }
 
-/// `simulate` 実行関数．
+/// Entry point for `simulate`.
 pub fn run(args: Args) -> Result<()> {
     let size = BoardSize::square(args.board_size);
 
@@ -112,7 +112,7 @@ pub fn run(args: Args) -> Result<()> {
     Ok(())
 }
 
-/// `Box<dyn Player>` を 2 つ受け取って `GameEngine::run_with_meta` を呼ぶ薄いラッパ．
+/// Thin wrapper that takes two `Box<dyn Player>` and calls `GameEngine::run_with_meta`.
 fn run_engine(
     engine: &mut GameEngine,
     black: &mut dyn Player,

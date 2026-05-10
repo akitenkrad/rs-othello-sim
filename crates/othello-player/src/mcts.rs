@@ -1,18 +1,24 @@
-//! [`MctsPlayer`]: UCT (Upper Confidence Bound applied to Trees) ベースの MCTS プレイヤー．
+//! [`MctsPlayer`]: an MCTS player based on UCT (Upper Confidence Bound
+//! applied to Trees).
 //!
-//! 標準 UCT による最小実装．デフォルトでは木は手選択ごとに新規生成する．
-//! [`MctsConfig::tree_reuse`] を `true` にすると，前回の探索木のうち
-//! 「自分が選んだ手 + 相手の応手」に対応する部分木を継承して訪問数・勝率統計を持ち越す
-//! ( Phase 6.2 で導入)．デフォルトは `false` で既存挙動と互換である．
+//! Minimal implementation of standard UCT. By default the tree is rebuilt
+//! before every move selection. Setting [`MctsConfig::tree_reuse`] to
+//! `true` carries over the subtree under "the move I played followed by
+//! the opponent's reply" so that visit counts and win-rate statistics are
+//! preserved (introduced in Phase 6.2). The default `false` matches the
+//! original behavior.
 //!
-//! ## アルゴリズム
+//! ## Algorithm
 //!
-//! 1. **Selection**: 葉ノードまで `argmax(Q/N + c * sqrt(ln(N_parent) / N))` で降下
-//! 2. **Expansion**: 未展開の合法手を 1 つ展開
-//! 3. **Simulation (rollout)**: ランダム合法手で終局までプレイ ( `max_rollout_depth` まで)
-//! 4. **Backpropagation**: 終局結果 ( win/loss/draw → +1/-1/0) を逆伝播
+//! 1. **Selection**: descend to a leaf via
+//!    `argmax(Q/N + c * sqrt(ln(N_parent) / N))`.
+//! 2. **Expansion**: expand one unexpanded legal move.
+//! 3. **Simulation (rollout)**: play random legal moves to terminal, up
+//!    to `max_rollout_depth`.
+//! 4. **Backpropagation**: backpropagate the terminal result
+//!    (win/loss/draw -> +1/-1/0).
 //!
-//! ## 例
+//! ## Example
 //!
 //! ```
 //! use othello_core::prelude::*;
@@ -31,34 +37,37 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashMap;
 
-/// MCTS プレイヤーの設定．
+/// Configuration for the MCTS player.
 #[derive(Debug, Clone, Copy)]
 pub struct MctsConfig {
-    /// 1 手あたりのシミュレーション数．
+    /// Number of simulations per move.
     pub simulations: u32,
-    /// UCT 定数 $c$．通常 $\sqrt{2} \approx 1.414$．
+    /// UCT exploration constant $c$. Typically $\sqrt{2} \approx 1.414$.
     pub exploration: f64,
-    /// 乱数 seed ( `None` なら OS 乱数からの派生)．
+    /// Random seed (`None` derives from OS randomness).
     pub seed: Option<u64>,
-    /// ロールアウトの最大深さ ( 安全装置)．
+    /// Maximum rollout depth (a safety cap).
     pub max_rollout_depth: u32,
-    /// 探索木の再利用フラグ．
+    /// Whether to reuse the search tree across moves.
     ///
-    /// `true` のとき，[`MctsPlayer::select_move`] は前回の探索木のうち
-    /// 「自分が選んだ手 + 相手の応手」に対応する部分木を新しい root として継承し，
-    /// 訪問数・勝率統計を引き継いで探索コストを節約する．
+    /// When `true`, [`MctsPlayer::select_move`] reuses the subtree under
+    /// "the move I played followed by the opponent's reply" as the new
+    /// root, carrying over visit counts and win-rate statistics to save
+    /// search work.
     ///
-    /// **デフォルトは `false`**: 既存挙動 ( 1 手ごとに木を新規構築) と互換である．
+    /// **Defaults to `false`**, which matches the original behavior of
+    /// rebuilding the tree on every move.
     pub tree_reuse: bool,
 }
 
 impl MctsConfig {
-    /// `simulations` のみ指定して，他はデフォルト値を採用する．
+    /// Builds a config with only `simulations` set; other fields use
+    /// defaults.
     ///
     /// - `exploration = sqrt(2)`
     /// - `seed = None`
     /// - `max_rollout_depth = 200`
-    /// - `tree_reuse = false` ( 既存挙動と同じ)
+    /// - `tree_reuse = false` (original behavior).
     #[must_use]
     pub fn new(simulations: u32) -> Self {
         Self {
@@ -70,31 +79,31 @@ impl MctsConfig {
         }
     }
 
-    /// `seed` を設定する ( builder)．
+    /// Builder: sets `seed`.
     #[must_use]
     pub fn with_seed(mut self, seed: u64) -> Self {
         self.seed = Some(seed);
         self
     }
 
-    /// `exploration` を設定する ( builder)．
+    /// Builder: sets `exploration`.
     #[must_use]
     pub fn with_exploration(mut self, c: f64) -> Self {
         self.exploration = c;
         self
     }
 
-    /// `max_rollout_depth` を設定する ( builder)．
+    /// Builder: sets `max_rollout_depth`.
     #[must_use]
     pub fn with_max_rollout_depth(mut self, depth: u32) -> Self {
         self.max_rollout_depth = depth;
         self
     }
 
-    /// `tree_reuse` を設定する ( builder)．
+    /// Builder: sets `tree_reuse`.
     ///
-    /// `true` のとき，前回探索木の部分木を継承して探索コストを節約する．
-    /// デフォルトは `false`．
+    /// When `true`, inherits the subtree from the previous search to
+    /// reduce the cost of subsequent searches. Defaults to `false`.
     #[must_use]
     pub fn with_tree_reuse(mut self, enable: bool) -> Self {
         self.tree_reuse = enable;
@@ -103,41 +112,47 @@ impl MctsConfig {
 }
 
 impl Default for MctsConfig {
-    /// `simulations = 1000` 以外はすべて [`MctsConfig::new`] と同じ
-    /// ( 特に `tree_reuse = false`)．
+    /// Equivalent to [`MctsConfig::new`] except `simulations = 1000`
+    /// (so `tree_reuse = false`).
     fn default() -> Self {
         Self::new(1000)
     }
 }
 
-/// UCT に基づく MCTS プレイヤー．
+/// MCTS player based on UCT.
 ///
-/// デフォルトでは各手選択ごとに新しい木を構築する．
-/// [`MctsConfig::tree_reuse`] を `true` にすると，前回の探索木のうち
-/// 「自分が選んだ手 + 相手の応手」に対応する部分木を継承する ( 木の再利用)．
+/// By default the tree is rebuilt before every move selection. Setting
+/// [`MctsConfig::tree_reuse`] to `true` reuses the subtree under "the
+/// move I played followed by the opponent's reply" (tree reuse).
 pub struct MctsPlayer {
     name: String,
     color: Color,
     config: MctsConfig,
     rng: ChaCha8Rng,
-    /// 直近 [`select_move`] / [`Evaluator::evaluate`] で得た「ルート直下の手 → ( visit, q)」．
+    /// `(move directly under the root, visit count, Q value)` collected
+    /// in the most recent [`select_move`] / [`Evaluator::evaluate`] call.
     ///
-    /// `Evaluator` 実装で正規化値を返すために保持する．
-    /// `select_move` 中の中間状態は反映しない ( 完了時にのみ更新)．
+    /// Kept so that `Evaluator` can return normalized values. Intermediate
+    /// states during `select_move` are not reflected (only updated on
+    /// completion).
     last_root_stats: Vec<(Move, u32, f64)>,
-    /// 直近 `select_move` 完了後に保持する部分木 ( `tree_reuse=true` のときのみ更新)．
+    /// Subtree retained after the most recent `select_move`. Only updated
+    /// when `tree_reuse=true`.
     ///
-    /// 部分木の root は「自分が選んだ手を適用した直後の局面」に対応し，
-    /// 子は相手の応手から始まる枝を保持する．
+    /// The subtree's root corresponds to "the position immediately after
+    /// applying the move I selected"; its children start from the
+    /// opponent's reply.
     persisted_tree: Option<MctsTree>,
-    /// 上記 `persisted_tree` の root に対応する局面 ( 一致確認用)．
+    /// State corresponding to the root of the `persisted_tree` above
+    /// (used to verify a match).
     persisted_root_state: Option<GameState>,
-    /// 直前の `select_move` 完了時に root が持っていた累積訪問数 ( デバッグ・テスト用)．
+    /// Total visit count at the root after the most recent `select_move`
+    /// (used for debugging and tests).
     last_root_visits: u32,
 }
 
 impl MctsPlayer {
-    /// `color` と `config` を指定して生成する．
+    /// Constructs a player with the given `color` and `config`.
     #[must_use]
     pub fn new(color: Color, config: MctsConfig) -> Self {
         let seed = config.seed.unwrap_or_else(default_seed);
@@ -153,7 +168,8 @@ impl MctsPlayer {
         }
     }
 
-    /// seed を後付けで設定する ( builder)．`MctsConfig::seed` を上書きする．
+    /// Builder: sets the seed after construction. Overrides
+    /// `MctsConfig::seed`.
     #[must_use]
     pub fn with_seed(mut self, seed: u64) -> Self {
         self.config.seed = Some(seed);
@@ -161,40 +177,46 @@ impl MctsPlayer {
         self
     }
 
-    /// 名前を変更する ( builder)．
+    /// Builder: changes the player name.
     #[must_use]
     pub fn with_name(mut self, name: impl Into<String>) -> Self {
         self.name = name.into();
         self
     }
 
-    /// 設定の参照．
+    /// Returns a reference to the configuration.
     #[inline]
     #[must_use]
     pub fn config(&self) -> &MctsConfig {
         &self.config
     }
 
-    /// 直近の `select_move` 完了時に root に蓄積されていた訪問数を返す ( テスト・診断用)．
+    /// Returns the visit count accumulated at the root after the most
+    /// recent `select_move` (useful for tests and diagnostics).
     ///
-    /// 通常 `tree_reuse = false` なら今回の `simulations` と一致するが，
-    /// `tree_reuse = true` で部分木を継承した場合はそれより大きくなる．
-    /// `select_move` を一度も呼んでいない場合は 0．
+    /// With `tree_reuse = false` this typically equals the current
+    /// `simulations`. With `tree_reuse = true` it can be larger because
+    /// the subtree from the previous search is inherited. Returns 0 when
+    /// `select_move` has never been called.
     #[inline]
     #[must_use]
     pub fn last_root_visit_total(&self) -> u32 {
         self.last_root_visits
     }
 
-    /// 前回の探索木から，現在の `state` に対応する部分木を取り出す ( tree reuse)．
+    /// Extracts the subtree corresponding to the current `state` from the
+    /// previous search tree (tree reuse).
     ///
-    /// # アルゴリズム ( 戦略 1: Move-indexed lookup)
+    /// # Algorithm (Strategy 1: move-indexed lookup)
     ///
-    /// 1. `persisted_root_state` は「自分が前回選んだ手を適用した直後の局面」を指す．
-    /// 2. `state.last_move` は「相手の応手」のはず ( ゲームエンジンが直前に適用した手)．
-    /// 3. `persisted_tree` の root から `state.last_move` をキーに子ノードを引き，
-    ///    その子を新しい root として持つ部分木を返す．
-    /// 4. 引いた子の局面と現在の `state` が一致しない場合は `None` ( fresh tree フォールバック)．
+    /// 1. `persisted_root_state` is the position that was reached
+    ///    immediately after applying our previously chosen move.
+    /// 2. `state.last_move` is expected to be the opponent's reply (the
+    ///    move that the game engine applied most recently).
+    /// 3. From the root of `persisted_tree`, look up the child keyed by
+    ///    `state.last_move` and return the subtree rooted at that child.
+    /// 4. If the looked-up child's position does not match the current
+    ///    `state`, return `None` (fresh-tree fallback).
     fn try_reuse_tree(&mut self, state: &GameState) -> Option<MctsTree> {
         let prev_tree = self.persisted_tree.take()?;
         let _prev_root_state = self.persisted_root_state.take()?;
@@ -312,11 +334,13 @@ impl Player for MctsPlayer {
 }
 
 impl Evaluator for MctsPlayer {
-    /// 直近の `select_move` 呼び出しで得たルート直下の visit 数を正規化して返す．
+    /// Returns the normalized visit counts of the children of the most
+    /// recent `select_move` root.
     ///
-    /// 引数 `state` が直近の root と異なる場合 ( 履歴が古い)，現状の cache をそのまま返す
-    /// 実装としている ( 必要なら呼び出し側で `select_move` を先に呼ぶこと)．
-    /// visit 0 の場合や cache 未生成の場合は `None` を返す．
+    /// If the supplied `state` differs from the most recent root (stale
+    /// history), the implementation simply returns the current cache (call
+    /// `select_move` first if up-to-date data is required). Returns `None`
+    /// when no visits were recorded or the cache has not yet been built.
     fn evaluate(&mut self, _state: &GameState) -> Option<HashMap<Move, f32>> {
         if self.last_root_stats.is_empty() {
             return None;
@@ -333,27 +357,30 @@ impl Evaluator for MctsPlayer {
     }
 }
 
-/// ノードに紐づく統計と未展開手のキュー．
+/// Statistics and untried-move queue associated with a node.
 #[derive(Debug)]
 struct MctsNode {
-    /// このノードに対応する局面．
+    /// Position corresponding to this node.
     state: GameState,
-    /// 親ノード ( `None` ならルート)．
+    /// Parent node (`None` for the root).
     parent: Option<usize>,
-    /// 親からこのノードに至る手．デバッグ・将来拡張用に保持．
+    /// Move that led from the parent to this node. Kept for debugging and
+    /// future extensions.
     #[allow(dead_code)]
     incoming_move: Option<Move>,
-    /// このノードの手番から見た累積スコア ( win = +1, draw = 0, loss = -1)．
-    /// より厳密には：ロールアウト終局時の `agent_color` 視点の結果ではなく，
-    /// **ノードの「これから指す側」視点** で逆算した値を保持する ( UCT の通例)．
+    /// Cumulative score from this node's perspective (`win = +1`,
+    /// `draw = 0`, `loss = -1`). More precisely, this stores the rollout
+    /// result rebased to the perspective of the side **about to move at
+    /// this node**, rather than the `agent_color` perspective at rollout
+    /// termination (the standard UCT convention).
     score_sum: f64,
-    /// 訪問回数．
+    /// Visit count.
     visits: u32,
-    /// まだ展開していない合法手．
+    /// Legal moves that have not yet been expanded.
     untried_moves: Vec<Move>,
-    /// 子ノード `( move, node_id)`．
+    /// Child nodes `(move, node_id)`.
     children: Vec<(Move, usize)>,
-    /// 終端ノードかどうか ( 終局済み)．
+    /// Whether this is a terminal node (the game has ended).
     terminal: bool,
 }
 
@@ -416,7 +443,7 @@ impl MctsTree {
         self.backpropagate(rollout_node, result_for_root_player);
     }
 
-    /// 葉まで UCT で降下し，葉ノードの id を返す．
+    /// Descends to a leaf via UCT and returns the leaf node id.
     fn select(&self, mut node: usize) -> usize {
         loop {
             let n = &self.nodes[node];
@@ -452,7 +479,7 @@ impl MctsTree {
         }
     }
 
-    /// 葉ノードに 1 手だけ子を追加し，新しい子ノード id を返す．
+    /// Adds a single child to the leaf and returns the new child's id.
     fn expand(&mut self, leaf: usize, rng: &mut ChaCha8Rng) -> usize {
         // ランダムに 1 つの未試行手を取り出す．
         let mv = {
@@ -475,7 +502,8 @@ impl MctsTree {
         new_id
     }
 
-    /// ロールアウト．戻り値はルートの「これから指す側」視点の結果 ( +1 / 0 / -1)．
+    /// Rollout. Returns the result from the perspective of the side about
+    /// to move at the root (`+1 / 0 / -1`).
     fn rollout(&self, node_id: usize, rng: &mut ChaCha8Rng, max_depth: u32) -> f64 {
         let root_player = self.nodes[0].state.side_to_move;
         let mut state = self.nodes[node_id].state.clone();
@@ -495,10 +523,13 @@ impl MctsTree {
         score_for(&state, root_player)
     }
 
-    /// 結果 `result_for_root` ( ルートの「これから指す側」視点 +1/0/-1) を逆伝播する．
+    /// Backpropagates the rollout result `result_for_root` (`+1 / 0 / -1`
+    /// from the perspective of the side about to move at the root).
     ///
-    /// 各ノードには「親で指した側 ( = 親の `side_to_move`) の視点」のスコアを蓄積する．
-    /// これにより，子の選択時には「親の視点での win rate」を最大化すればよい．
+    /// Each node accumulates the score from the perspective of the side
+    /// that made the move into it (i.e., the parent's `side_to_move`).
+    /// Thanks to this convention, child selection only has to maximize the
+    /// win rate from the parent's perspective.
     fn backpropagate(&mut self, node_id: usize, result_for_root: f64) {
         let root_side = self.nodes[0].state.side_to_move;
         let mut cur = Some(node_id);
@@ -520,7 +551,8 @@ impl MctsTree {
         }
     }
 
-    /// ルート直下の各子の `( move, visits, q)` を返す．`q` は `score_sum / visits`．
+    /// Returns `(move, visits, q)` for each child of the root, with
+    /// `q = score_sum / visits`.
     fn root_stats(&self) -> Vec<(Move, u32, f64)> {
         let root = &self.nodes[0];
         let mut out = Vec::with_capacity(root.children.len());
@@ -536,7 +568,7 @@ impl MctsTree {
         out
     }
 
-    /// ルート直下の子から訪問数最大の手を選ぶ．
+    /// Selects the most-visited child of the root.
     fn best_move(&self) -> Option<Move> {
         let root = &self.nodes[0];
         let mut best: Option<(Move, u32)> = None;
@@ -551,12 +583,14 @@ impl MctsTree {
         best.map(|(m, _)| m)
     }
 
-    /// ルートの累積訪問数 ( 全子の visit 合計 + 葉ロールアウトの累積)．
+    /// Cumulative visit count at the root (sum of all children's visits
+    /// plus the leaf-rollout backups).
     fn root_visits(&self) -> u32 {
         self.nodes[0].visits
     }
 
-    /// ルート直下の子のうち `mv` に対応するものの局面を返す ( 存在しなければ `None`)．
+    /// Returns the position of the root's child corresponding to `mv`
+    /// (`None` if no such child exists).
     fn child_state(&self, mv: Move) -> Option<&GameState> {
         let root = &self.nodes[0];
         for &(m, child_id) in &root.children {
@@ -567,10 +601,12 @@ impl MctsTree {
         None
     }
 
-    /// 自分の選択手 `chosen_move` を適用した直後の部分木を取り出す ( tree reuse 用)．
+    /// Extracts the subtree reached by applying our chosen move
+    /// `chosen_move` (used for tree reuse).
     ///
-    /// 子ノードが存在する場合，それを新しい root として再構築した [`MctsTree`] と
-    /// 対応する局面 [`GameState`] を返す．存在しない場合は `None`．
+    /// If the matching child exists, returns the [`MctsTree`] rebuilt with
+    /// that child as the new root together with the corresponding
+    /// [`GameState`]. Returns `None` otherwise.
     fn extract_subtree(self, chosen_move: Move) -> Option<(MctsTree, GameState)> {
         let root = &self.nodes[0];
         let mut child_id_opt: Option<usize> = None;
@@ -586,9 +622,10 @@ impl MctsTree {
         Some((subtree, post_state))
     }
 
-    /// `mv` に対応する子を新 root とする部分木を返す ( tree reuse 用)．
+    /// Returns the subtree whose new root is the child matching `mv`
+    /// (used for tree reuse).
     ///
-    /// 内部呼び出しから使う．存在しなければ `None`．
+    /// Used by internal callers; returns `None` if no such child exists.
     fn into_subtree(self, mv: Move) -> Option<MctsTree> {
         let root = &self.nodes[0];
         let mut child_id_opt: Option<usize> = None;
@@ -602,13 +639,17 @@ impl MctsTree {
         self.into_subtree_inner(child_id)
     }
 
-    /// `new_root_id` を新しいルートとして部分木を切り出す共通実装．
+    /// Shared implementation that carves out a subtree rooted at
+    /// `new_root_id`.
     ///
-    /// `score_sum` の視点は，旧木では「親ノードの side_to_move」だが
-    /// 新しい root は親を持たないため `root_side = root.state.side_to_move` 視点に切り替わる．
-    /// 旧親の `side_to_move` と新 root の `side_to_move` が異なる場合 ( 通常: 必ず異なる)，
-    /// 新 root の `score_sum` のみ符号反転して整合させる．それ以外のノードは
-    /// 「親の side_to_move」が新旧とも同じ ( 親の親が変わっても親自体は同じ) なので不変．
+    /// In the old tree, `score_sum` is recorded from the perspective of
+    /// the parent node's `side_to_move`. The new root has no parent, so
+    /// its viewpoint switches to `root_side = root.state.side_to_move`.
+    /// When the old parent's `side_to_move` differs from the new root's
+    /// `side_to_move` (the usual case), the sign of the new root's
+    /// `score_sum` is flipped to keep things consistent. All other nodes
+    /// retain the same parent (only the parent of the parent might have
+    /// changed), so their viewpoint is unchanged.
     fn into_subtree_inner(self, new_root_id: usize) -> Option<MctsTree> {
         let MctsTree { nodes, exploration } = self;
 
@@ -678,7 +719,8 @@ impl MctsTree {
     }
 }
 
-/// 終局 / 打ち切り状態における `view` 視点のスコア ( +1 win / 0 draw / -1 loss)．
+/// Score from the `view` perspective at a terminal or cut-off state
+/// (`+1` win, `0` draw, `-1` loss).
 fn score_for(state: &GameState, view: Color) -> f64 {
     let b = state.board.count(Color::Black);
     let w = state.board.count(Color::White);
@@ -787,8 +829,9 @@ mod tests {
         assert!(!cfg2.tree_reuse);
     }
 
-    /// tree_reuse=on と tree_reuse=off で，多数の simulations + 多局を見たとき
-    /// 勝率に大きな差が出ないこと ( 同等の方策である) を確認する．
+    /// Confirms that, with many simulations and many games, `tree_reuse =
+    /// true` and `tree_reuse = false` do not produce dramatically
+    /// different win rates (i.e., they correspond to the same policy).
     #[test]
     fn tree_reuse_does_not_change_decision_distribution() {
         use crate::Player;
@@ -836,11 +879,13 @@ mod tests {
         );
     }
 
-    /// tree_reuse=true で 2 手目以降の root 累積訪問数が 1 手目より大きいこと
-    /// ( 部分木が継承されている証拠)．
+    /// With `tree_reuse = true`, the root visit total at the second and
+    /// later moves should exceed the first move's total (evidence that
+    /// the subtree is being inherited).
     ///
-    /// sims を多めに取ることで，depth-2 ( = 相手の応手後) のノードが必ず
-    /// 1 回以上展開されるようにし，部分木継承が成立することを保証する．
+    /// Choosing a larger `sims` ensures that depth-2 nodes (i.e., the
+    /// position after the opponent's reply) are expanded at least once,
+    /// guaranteeing that the subtree-inheritance path is exercised.
     #[test]
     fn tree_reuse_actually_amortizes_visits() {
         use crate::Player;
@@ -873,7 +918,7 @@ mod tests {
         );
     }
 
-    /// reset() で tree_reuse の継承状態がクリアされること．
+    /// `reset()` clears the persisted tree-reuse state.
     #[test]
     fn tree_reuse_reset_clears_persisted_tree() {
         use crate::Player;
@@ -892,8 +937,9 @@ mod tests {
         assert_eq!(mcts.last_root_visit_total(), sims);
     }
 
-    /// 渡される state が前回の continuation と完全に乖離しているとき
-    /// ( ゲームエンジンが新規ゲームを始めたなど) ，fresh tree にフォールバックする．
+    /// Falls back to a fresh tree when the supplied `state` is completely
+    /// disconnected from the previous continuation (for example, when the
+    /// game engine starts a new game).
     #[test]
     fn tree_reuse_falls_back_on_state_mismatch() {
         use crate::Player;
@@ -917,7 +963,8 @@ mod tests {
         assert_eq!(mcts.last_root_visit_total(), sims);
     }
 
-    /// MCTS は Random に対して大幅優位が期待できる ( seed 固定 10 局で勝率 60% 以上)．
+    /// MCTS is expected to dominate Random by a wide margin (at least
+    /// 60% wins over 10 fixed-seed games).
     #[test]
     fn beats_random_majority() {
         use crate::Player;

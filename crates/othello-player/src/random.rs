@@ -1,4 +1,4 @@
-//! [`RandomPlayer`]: 合法手から一様サンプリングするプレイヤー．
+//! [`RandomPlayer`]: a player that samples uniformly from legal moves.
 
 use crate::traits::{Player, PlayerError};
 use othello_core::{Color, GameState, Move};
@@ -6,9 +6,11 @@ use rand::SeedableRng;
 use rand::seq::SliceRandom;
 use rand_chacha::ChaCha8Rng;
 
-/// 合法手から `ChaCha8Rng` で一様にサンプリングする決定的プレイヤー．
+/// Deterministic player that samples uniformly from legal moves using
+/// `ChaCha8Rng`.
 ///
-/// 同じ seed と同じ局面列なら同じ手列を返す．
+/// Returns the same move sequence given the same seed and same sequence
+/// of states.
 pub struct RandomPlayer {
     name: String,
     color: Color,
@@ -17,7 +19,7 @@ pub struct RandomPlayer {
 }
 
 impl RandomPlayer {
-    /// 名前 + 色 + seed を指定して生成する．
+    /// Constructs a player from a name, color, and seed.
     #[must_use]
     pub fn new(name: impl Into<String>, color: Color, seed: u64) -> Self {
         Self {
@@ -28,13 +30,13 @@ impl RandomPlayer {
         }
     }
 
-    /// `RandomPlayer` という標準名で seed のみ指定して生成する．
+    /// Constructs a player with the default name (`"RandomPlayer"`).
     #[must_use]
     pub fn with_seed(color: Color, seed: u64) -> Self {
         Self::new("RandomPlayer", color, seed)
     }
 
-    /// 初期 seed を返す ( ロギング・記録用)．
+    /// Returns the initial seed (useful for logging and game records).
     #[inline]
     #[must_use]
     pub const fn seed(&self) -> u64 {

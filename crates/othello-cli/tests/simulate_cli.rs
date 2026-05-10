@@ -1,4 +1,4 @@
-//! `simulate` サブコマンドの統合テスト．
+//! Integration tests for the `simulate` subcommand.
 
 use std::process::Command;
 

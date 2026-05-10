@@ -1,10 +1,10 @@
-//! `PlayerSpec::Nn` を含む完全な `Box<dyn Player>` ビルダー．
+//! Full `Box<dyn Player>` builder including `PlayerSpec::Nn`.
 //!
-//! `othello-player` クレートは Candle に依存しないため，`Nn` バリアントの構築は
-//! このモジュールに集約する．他のバリアントは `othello-player` の `build_player`
-//! に委譲する．
+//! The `othello-player` crate does not depend on Candle, so construction of
+//! the `Nn` variant is centralized here. Other variants are delegated to
+//! `othello-player`'s `build_player`.
 //!
-//! ## 使い方
+//! ## Usage
 //!
 //! ```ignore
 //! use othello_cli::player_spec_with_nn::build_player;
@@ -18,10 +18,10 @@ use othello_core::{BoardSize, Color};
 use othello_nn::{CandleModel, NnEvaluator, OnnxModel};
 use othello_player::{NnBackend, NnSpec, Player, PlayerSpec};
 
-/// `PlayerSpec` から `Box<dyn Player>` を生成する．`Nn` も対応する．
+/// Build a `Box<dyn Player>` from a [`PlayerSpec`], including the `Nn` variant.
 ///
-/// 既存の Random / Greedy / Mcts / External は [`othello_player::player_spec::build_player`]
-/// にそのまま委譲する．
+/// Existing Random / Greedy / Mcts / External variants are delegated to
+/// [`othello_player::player_spec::build_player`] as is.
 pub fn build_player(spec: &PlayerSpec, color: Color) -> Result<Box<dyn Player>> {
     match spec {
         PlayerSpec::Nn(nn_spec) => build_nn_player(nn_spec, color),
@@ -29,7 +29,7 @@ pub fn build_player(spec: &PlayerSpec, color: Color) -> Result<Box<dyn Player>> 
     }
 }
 
-/// `NnSpec` から `Box<dyn Player>` を生成する．
+/// Build a `Box<dyn Player>` from an [`NnSpec`].
 fn build_nn_player(spec: &NnSpec, color: Color) -> Result<Box<dyn Player>> {
     let device = Device::Cpu;
     let board_size = BoardSize::STANDARD;
@@ -59,7 +59,7 @@ fn build_nn_player(spec: &NnSpec, color: Color) -> Result<Box<dyn Player>> {
     }
 }
 
-/// 共通オプション ( temperature / deterministic / seed) を適用する．
+/// Apply the shared options (temperature / deterministic / seed).
 fn apply_nn_options<M: othello_nn::NnModel + 'static>(
     mut ev: NnEvaluator<M>,
     spec: &NnSpec,
@@ -76,10 +76,11 @@ fn apply_nn_options<M: othello_nn::NnModel + 'static>(
     ev
 }
 
-/// SPEC + per-game seed override から Player を生成する ( BatchRunner factory 用)．
+/// Build a Player from a SPEC plus a per-game seed override (used by the
+/// `BatchRunner` factory).
 ///
-/// `Random` / `Mcts` / `Nn` は `seed ^ overlay_seed` で乱数を撹拌する．
-/// `External` / `Greedy` は overlay seed の影響を受けない．
+/// `Random` / `Mcts` / `Nn` mix randomness via `seed ^ overlay_seed`.
+/// `External` / `Greedy` are unaffected by the overlay seed.
 pub fn build_with_seed_override(
     spec: &PlayerSpec,
     color: Color,

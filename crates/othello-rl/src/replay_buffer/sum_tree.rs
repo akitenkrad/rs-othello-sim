@@ -1,14 +1,18 @@
-//! [`SumTree`]: Prioritized Experience Replay の比例サンプリング用データ構造．
+//! [`SumTree`]: data structure for proportional sampling in Prioritized
+//! Experience Replay.
 //!
-//! 完全二分木で，葉が priority を持ち，内部ノードは子の和を持つ．
-//! `total()` 全体和は O(1)，`get(value)` の累積探索は O(log N)．
+//! A complete binary tree whose leaves hold priorities and whose internal
+//! nodes hold the sum of their children. `total()` is `O(1)`, and the
+//! cumulative-sum lookup `get(value)` is `O(log N)`.
 
-/// Sum-tree．`capacity` 件の leaf を持つ完全二分木．
+/// Sum-tree: a complete binary tree with `capacity` leaves.
 ///
-/// 内部表現は `Vec<f32>` で長さ `2 * capacity - 1`．先頭の `capacity - 1` 個が
-/// internal node ( 0..capacity-1)，残り `capacity` 個が leaf ( capacity-1..2*capacity-1)．
-/// leaf index `leaf_id` ( 0..capacity) と内部表現 index の関係は
-/// `tree_index = leaf_id + capacity - 1`．
+/// The internal representation is a `Vec<f32>` of length `2 * capacity - 1`.
+/// The first `capacity - 1` entries are internal nodes (`0..capacity-1`)
+/// and the remaining `capacity` entries are leaves
+/// (`capacity-1..2*capacity-1`). The relationship between a leaf index
+/// `leaf_id` (`0..capacity`) and the internal representation index is
+/// `tree_index = leaf_id + capacity - 1`.
 #[derive(Debug, Clone)]
 pub struct SumTree {
     capacity: usize,
@@ -18,11 +22,12 @@ pub struct SumTree {
 }
 
 impl SumTree {
-    /// `capacity` 葉の sum-tree を作る．`capacity` は 1 以上．
+    /// Creates a sum-tree with `capacity` leaves. `capacity` must be at
+    /// least 1.
     ///
     /// # Panics
     ///
-    /// `capacity == 0` の場合 panic．
+    /// Panics if `capacity == 0`.
     #[must_use]
     pub fn new(capacity: usize) -> Self {
         assert!(capacity > 0, "SumTree capacity must be > 0");
@@ -34,35 +39,36 @@ impl SumTree {
         }
     }
 
-    /// 葉の容量．
+    /// Returns the leaf capacity.
     #[inline]
     #[must_use]
     pub fn capacity(&self) -> usize {
         self.capacity
     }
 
-    /// 現在格納されている要素数．
+    /// Returns the number of elements currently stored.
     #[inline]
     #[must_use]
     pub fn len(&self) -> usize {
         self.size
     }
 
-    /// 空かどうか．
+    /// Returns whether the tree is empty.
     #[inline]
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.size == 0
     }
 
-    /// 総和 ( 全葉の priority の合計)．
+    /// Returns the total sum (sum of all leaf priorities).
     #[inline]
     #[must_use]
     pub fn total(&self) -> f32 {
         self.nodes[0]
     }
 
-    /// リング位置に従って 1 件追加し，書き込んだ leaf index を返す．
+    /// Adds one element at the current ring position and returns the leaf
+    /// index that was written.
     pub fn add(&mut self, priority: f32) -> usize {
         let leaf_id = self.cursor;
         self.update(leaf_id, priority);
@@ -73,11 +79,11 @@ impl SumTree {
         leaf_id
     }
 
-    /// `leaf_id` 番目の leaf の priority を更新する．
+    /// Updates the priority of the leaf at `leaf_id`.
     ///
     /// # Panics
     ///
-    /// `leaf_id >= capacity` で panic．
+    /// Panics if `leaf_id >= capacity`.
     pub fn update(&mut self, leaf_id: usize, priority: f32) {
         assert!(leaf_id < self.capacity, "leaf_id {leaf_id} out of range");
         let mut idx = leaf_id + self.capacity - 1;
@@ -89,10 +95,12 @@ impl SumTree {
         }
     }
 
-    /// 累積和が `value` を超える ( もしくは等しくなる) 最初の leaf を返す．
+    /// Returns the first leaf whose cumulative sum reaches or exceeds
+    /// `value`.
     ///
-    /// 戻り値は `(leaf_id, priority)`．`value` は `[0, total())` の範囲を想定．
-    /// 範囲外の `value` でも安全に最後の leaf を返す．
+    /// The return value is `(leaf_id, priority)`. `value` is expected to
+    /// fall in `[0, total())`; out-of-range values safely return the last
+    /// leaf.
     #[must_use]
     pub fn get(&self, mut value: f32) -> (usize, f32) {
         let mut idx = 0usize;
@@ -111,7 +119,7 @@ impl SumTree {
         (leaf_id, self.nodes[idx])
     }
 
-    /// すべての leaf を 0 にリセットする．
+    /// Resets every leaf to zero.
     pub fn clear(&mut self) {
         self.nodes.fill(0.0);
         self.cursor = 0;

@@ -1,4 +1,4 @@
-//! `convert` サブコマンド: 棋譜形式変換 ( WTHOR / JSON / GGF → JSON / GGF)．
+//! `convert` subcommand: convert game records (WTHOR/JSON/GGF -> JSON/GGF).
 
 use anyhow::{Context, Result, anyhow};
 use clap::{Args as ClapArgs, ValueEnum};
@@ -10,51 +10,51 @@ use std::fs::{self, File};
 use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 
-/// 入力フォーマット．
+/// Input format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum InputFormat {
-    /// 自前 JSON．
+    /// Native JSON.
     Json,
-    /// GGF．
+    /// GGF.
     Ggf,
-    /// WTHOR バイナリ．
+    /// WTHOR binary.
     Wthor,
 }
 
-/// 出力フォーマット ( WTHOR は出力不可)．
+/// Output format (WTHOR cannot be written).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum OutputFormat {
-    /// 自前 JSON．
+    /// Native JSON.
     Json,
-    /// GGF．
+    /// GGF.
     Ggf,
 }
 
-/// `convert` の引数．
+/// Arguments for `convert`.
 #[derive(Debug, ClapArgs)]
 pub struct Args {
-    /// 入力ファイル．
+    /// Input file.
     #[arg(long)]
     pub input: PathBuf,
 
-    /// 入力フォーマット．
+    /// Input format.
     #[arg(long, value_enum)]
     pub input_format: InputFormat,
 
-    /// 出力フォーマット．
+    /// Output format.
     #[arg(long, value_enum)]
     pub output_format: OutputFormat,
 
-    /// 単一局の出力先ファイル ( --output-dir と排他)．
+    /// Output file for a single record (mutually exclusive with --output-dir).
     #[arg(long)]
     pub output: Option<PathBuf>,
 
-    /// 複数局の出力先ディレクトリ ( --output と排他)．
+    /// Output directory for multiple records (mutually exclusive with --output).
     #[arg(long)]
     pub output_dir: Option<PathBuf>,
 }
 
-/// `convert` 実行関数．
+/// Entry point for `convert`.
 pub fn run(args: Args) -> Result<()> {
     if args.output.is_some() && args.output_dir.is_some() {
         return Err(anyhow!("--output and --output-dir are mutually exclusive"));
@@ -149,7 +149,7 @@ mod tests {
     use super::*;
     use othello_core::{Color, Coord, Move};
 
-    /// 最小限の WTHOR バイト列を作って convert テスト用．
+    /// Builds a minimal WTHOR byte sequence for the convert tests.
     fn make_wthor_bytes() -> Vec<u8> {
         let mut header = [0u8; 16];
         header[4..8].copy_from_slice(&1u32.to_le_bytes()); // n_games

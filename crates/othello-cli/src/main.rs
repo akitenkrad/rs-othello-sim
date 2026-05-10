@@ -1,4 +1,4 @@
-//! `othello-cli` バイナリエントリポイント．
+//! `othello-cli` binary entry point.
 
 mod commands;
 pub mod player_spec_with_nn;
@@ -12,19 +12,19 @@ use tracing_subscriber::fmt;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-/// rs-othello-sim CLI フロントエンド．
+/// rs-othello-sim CLI frontend.
 #[derive(Debug, Parser)]
 #[command(name = "othello-cli", version, about = "Othello simulator CLI")]
 struct Cli {
-    /// tracing ログレベル ( trace/debug/info/warn/error)．stderr に適用される．
+    /// tracing log level (trace/debug/info/warn/error). Applied to stderr.
     #[arg(long, global = true, default_value = "info")]
     log_level: String,
 
-    /// tracing 出力フォーマット ( text / json)．stderr 出力のみに適用．
+    /// tracing output format (text/json). Applied to stderr only.
     #[arg(long, global = true, value_enum, default_value_t = LogFormat::Text)]
     log_format: LogFormat,
 
-    /// 追加で JSON 形式のログをファイルに出力する ( stderr 出力と並行)．
+    /// Additionally write JSON-formatted logs to a file (alongside stderr).
     #[arg(long, global = true)]
     log_file: Option<PathBuf>,
 
@@ -32,35 +32,35 @@ struct Cli {
     command: Command,
 }
 
-/// tracing 出力フォーマット．
+/// tracing output format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 enum LogFormat {
-    /// 人間可読 ( デフォルト)．
+    /// Human-readable (default).
     Text,
-    /// JSON 構造化．
+    /// Structured JSON.
     Json,
 }
 
-/// サブコマンド一覧．
+/// Available subcommands.
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// 2 人対戦 ( 標準入出力)．
+    /// Two-player match (stdin/stdout).
     Play(commands::play::Args),
-    /// 1 局のシミュレーション ( random/greedy 等)．
+    /// Simulate one game (random/greedy/etc.).
     Simulate(commands::simulate::Args),
-    /// 棋譜の TUI 再生．
+    /// Replay a game record in the TUI.
     Replay(commands::replay::Args),
-    /// 棋譜形式変換 ( WTHOR/JSON/GGF → JSON/GGF)．
+    /// Convert game records (WTHOR/JSON/GGF -> JSON/GGF).
     Convert(commands::convert::Args),
-    /// 棋譜の統計情報を表示．
+    /// Print summary statistics for a game record.
     Inspect(commands::inspect::Args),
-    /// バッチ self-play ( BatchRunner)．
+    /// Batch self-play (BatchRunner).
     Selfplay(commands::selfplay::Args),
-    /// 簡易ベンチマーク ( legal-moves / self-play)．
+    /// Simple benchmarks (legal-moves / self-play).
     Benchmark(commands::benchmark::Args),
-    /// AI 対戦の TUI 観戦．
+    /// Watch an AI vs AI match in the TUI.
     Observe(commands::observe::Args),
-    /// 公開データセット ( WTHOR 等) のダウンロード．
+    /// Download public datasets (e.g. WTHOR).
     Fetch(commands::fetch::Args),
 }
 

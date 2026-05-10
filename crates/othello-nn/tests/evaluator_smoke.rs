@@ -1,4 +1,4 @@
-//! ランダム初期化モデルでの 1 局 smoke test．
+//! Single-game smoke test with a randomly initialized model.
 
 use candle_core::Device;
 use othello_core::{BoardSize, Color, GameState, Move};

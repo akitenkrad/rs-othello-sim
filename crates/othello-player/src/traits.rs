@@ -1,79 +1,87 @@
-//! [`Player`] trait と関連エラー型．
+//! [`Player`] trait and the associated error types.
 
 use othello_core::{Color, GameResult, GameState, Move};
 use std::collections::HashMap;
 use thiserror::Error;
 
-/// プレイヤーが手の選択中に発生し得るエラー．
+/// Errors that may occur while a player chooses a move.
 #[derive(Debug, Error)]
 pub enum PlayerError {
-    /// 標準入力やその他のソースからの読み取りに失敗した．
+    /// Failed to read from stdin or another source.
     #[error("input error: {0}")]
     Input(#[from] std::io::Error),
 
-    /// 入力された文字列が座標として解釈できない．
+    /// The input string cannot be parsed as a coordinate.
     #[error("invalid coordinate: {input:?} ({reason})")]
     InvalidCoord {
-        /// 入力された文字列．
+        /// The original input string.
         input: String,
-        /// 詳細な失敗理由．
+        /// Detailed reason for the failure.
         reason: &'static str,
     },
 
-    /// プレイヤーが合法手以外を返そうとした．
+    /// The player attempted to return an illegal move.
     #[error("player attempted an illegal move")]
     IllegalMove,
 
-    /// EOF など入力が枯渇した．
+    /// Input was exhausted (e.g. EOF) before a move could be selected.
     #[error("input exhausted before move was selected")]
     InputExhausted,
 
-    /// その他．
+    /// Other errors.
     #[error("player error: {0}")]
     Other(String),
 }
 
-/// Othello プレイヤー戦略の trait．
+/// Trait for Othello playing strategies.
 ///
-/// `Send` 境界はバッチ並列実行 ( Phase 4 の `BatchRunner`) で使うために要求する．
+/// The `Send` bound is required so that players can be used by the
+/// parallel batch runner (`BatchRunner`, Phase 4).
 pub trait Player: Send {
-    /// プレイヤー名 ( ロギングや棋譜記録に利用される)．
+    /// Player name (used for logging and game records).
     fn name(&self) -> &str;
 
-    /// プレイヤーの色 ( 黒/白)．
+    /// Player color (black/white).
     fn color(&self) -> Color;
 
-    /// 現局面で次の手を選ぶ．
+    /// Selects the next move from the given state.
     ///
-    /// パスしか取れない局面では，呼び出し側 ( engine) が `Move::Pass` を強制するため，
-    /// このメソッドが Pass を返すのは「合法手があるのに Pass を返した」場合に限られる．
+    /// When only `Pass` is legal, the engine substitutes `Move::Pass` on
+    /// the player's behalf, so the only valid scenario in which this
+    /// method returns `Pass` is when the player erroneously passes while
+    /// legal moves exist.
     fn select_move(&mut self, state: &GameState) -> Result<Move, PlayerError>;
 
-    /// ゲーム終了時に呼ばれる ( 学習系プレイヤーの後処理用)．
+    /// Hook invoked at the end of a game (e.g. for learning post-processing).
     fn on_game_end(&mut self, _final_state: &GameState, _result: GameResult) {}
 
-    /// ゲーム開始時に呼ばれる ( 状態のリセット用)．
+    /// Hook invoked at the start of a game (e.g. to reset internal state).
     fn reset(&mut self) {}
 
-    /// プレイヤーが [`Evaluator`] を実装している場合，その可変参照を返す．
+    /// Returns a mutable reference to the evaluator if the player
+    /// implements [`Evaluator`].
     ///
-    /// デフォルト実装は `None`．`MctsPlayer` 等は override してこのメソッドから自身を返す．
-    /// TUI Observe モードの evaluator overlay 表示など，外部から評価値を覗く用途に使う．
+    /// Defaults to `None`. Players such as `MctsPlayer` should override
+    /// this to expose themselves. Used to peek at evaluation values from
+    /// the TUI Observe overlay or other external consumers.
     fn evaluator(&mut self) -> Option<&mut dyn Evaluator> {
         None
     }
 }
 
-/// 各合法手に対する評価値 ( 勝率・visit 数を正規化した値など) を返す trait．
+/// Trait that returns evaluation scores for each legal move (e.g.
+/// normalized visit counts or win-rate estimates).
 ///
-/// MCTS の visit count や NN の policy 値を TUI Observe モードや CLI から覗くために用意した
-/// 補助 trait．対応していないプレイヤーは何も実装しないか，[`Evaluator::evaluate`] が
-/// `None` を返せばよい．
+/// Helper trait used to peek at MCTS visit counts or NN policy outputs
+/// from the TUI Observe mode and the CLI. Players that do not support
+/// evaluation can either skip implementing it or have
+/// [`Evaluator::evaluate`] return `None`.
 ///
-/// 値は `0.0..=1.0` の勝率推定など，**大きいほど良い** 値とする．呼び出し側は表示時に
-/// 最大値を強調するなどの用途に使う．
+/// Scores follow the **higher-is-better** convention (e.g. win-rate
+/// estimates in `0.0..=1.0`). The caller may emphasize the maximum value
+/// when rendering.
 ///
-/// ## 例
+/// ## Example
 ///
 /// ```ignore
 /// use othello_core::{Move, GameState};
@@ -85,9 +93,10 @@ pub trait Player: Send {
 /// let scores: Option<HashMap<Move, f32>> = p.evaluate(&s);
 /// ```
 pub trait Evaluator: Send {
-    /// 各合法手の評価値を返す ( キーは合法手の `Move`)．
+    /// Returns a per-legal-move score map (keys are legal `Move`s).
     ///
-    /// 呼び出しによって内部状態を更新してよい ( 例: MCTS の木を 1 手分だけ走らせる)．
-    /// 評価未対応のプレイヤーは `None` を返す．
+    /// May update internal state as a side effect (e.g. running one
+    /// additional MCTS rollout). Players that do not support evaluation
+    /// return `None`.
     fn evaluate(&mut self, state: &GameState) -> Option<HashMap<Move, f32>>;
 }

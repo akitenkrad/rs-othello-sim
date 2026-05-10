@@ -1,9 +1,10 @@
-//! MCTS `tree_reuse` の統合テスト ( Phase 6.2)．
+//! Integration tests for MCTS `tree_reuse` (Phase 6.2).
 
 use othello_core::prelude::*;
 use othello_player::{GreedyPlayer, MctsConfig, MctsPlayer, Player, RandomPlayer};
 
-/// MCTS ( tree_reuse=true) vs Greedy で 8×8 を 1 局完走．不正手を返さず Pass も適切に扱う．
+/// MCTS (`tree_reuse = true`) vs Greedy plays a full 8x8 game without
+/// returning illegal moves and handles passes correctly.
 #[test]
 fn mcts_with_tree_reuse_plays_full_game() {
     let mut mcts = MctsPlayer::new(Color::Black, MctsConfig::new(100).with_tree_reuse(true))
@@ -39,7 +40,7 @@ fn mcts_with_tree_reuse_plays_full_game() {
     let _ = result;
 }
 
-/// 4×4 ( Generic 盤面) でも tree_reuse=true で正常動作する．
+/// `tree_reuse = true` works correctly on 4x4 (the generic board) too.
 #[test]
 fn mcts_tree_reuse_4x4() {
     let s = GameState::standard(BoardSize::square(4)).unwrap();
@@ -66,8 +67,9 @@ fn mcts_tree_reuse_4x4() {
     assert!(state.is_terminal());
 }
 
-/// tree_reuse=on と off で同じ seed なら，1 手目は同一の手を返す ( fresh tree からスタートする
-/// 1 手目は両者で挙動が一致するはず)．
+/// With the same seed, `tree_reuse = on` and `tree_reuse = off` return
+/// the same first move (both start from a fresh tree at move 1, so
+/// behaviour must match).
 #[test]
 fn tree_reuse_first_move_matches_baseline() {
     let mut mcts_off =

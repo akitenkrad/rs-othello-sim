@@ -1,6 +1,7 @@
-//! 任意サイズの汎用盤面 [`GenericBoard`]．
+//! Arbitrary-sized generic board [`GenericBoard`].
 //!
-//! 4×4 から 26×26 までのサイズに対応する．`Vec<Option<Color>>` で行優先に格納する．
+//! Supports board sizes from 4x4 up to 26x26. Cells are stored row-major in
+//! a `Vec<Option<Color>>`.
 
 use crate::board::BoardSize;
 use crate::color::Color;
@@ -9,25 +10,27 @@ use crate::error::{IllegalMoveReason, OthelloError};
 use crate::mv::Move;
 use crate::rules::{flips_for_move, legal_move_coords};
 
-/// 許容する最小盤面辺．
+/// Minimum allowed board side.
 pub const MIN_SIDE: u8 = 4;
-/// 許容する最大盤面辺 ( アルファベット A〜Z で表現可能な上限)．
+/// Maximum allowed board side (the upper bound representable with the
+/// letters A through Z).
 pub const MAX_SIDE: u8 = 26;
 
-/// 任意サイズの盤面実装．
+/// Arbitrary-sized board implementation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenericBoard {
     size: BoardSize,
-    /// 行優先 ( row 0, col 0, 1, ..., row 1, col 0, ...)
+    /// Row-major (row 0 col 0, 1, ..., row 1 col 0, ...).
     cells: Vec<Option<Color>>,
 }
 
 impl GenericBoard {
-    /// 全マス空の盤面を生成する．
+    /// Constructs an empty board.
     ///
-    /// サイズが許容範囲外の場合 [`OthelloError::InvalidBoardSize`] を返す．
-    /// rows と cols のどちらかが偶数でなければ標準初期配置は置けないが，
-    /// 空盤面の生成自体はサイズが範囲内なら可能にする．
+    /// Returns [`OthelloError::InvalidBoardSize`] if the size is out of the
+    /// allowed range. The standard initial position requires both `rows`
+    /// and `cols` to be even, but creating an empty board succeeds for any
+    /// size within range.
     pub fn empty(size: BoardSize) -> Result<Self, OthelloError> {
         if size.rows < MIN_SIDE
             || size.rows > MAX_SIDE
@@ -46,10 +49,10 @@ impl GenericBoard {
         })
     }
 
-    /// 標準的な Othello 初期配置 ( 中央 4 マスに白黒)．
+    /// Standard Othello initial position (center four cells filled).
     ///
-    /// `rows` と `cols` がともに偶数であることが必要．奇数辺の場合は
-    /// [`OthelloError::InvalidBoardSize`] を返す．
+    /// Requires both `rows` and `cols` to be even. Returns
+    /// [`OthelloError::InvalidBoardSize`] when either side is odd.
     pub fn standard(size: BoardSize) -> Result<Self, OthelloError> {
         if size.rows % 2 != 0 || size.cols % 2 != 0 {
             return Err(OthelloError::InvalidBoardSize {
@@ -71,7 +74,7 @@ impl GenericBoard {
         Ok(b)
     }
 
-    /// 盤面サイズを返す．
+    /// Returns the board size.
     #[inline]
     #[must_use]
     pub const fn size(&self) -> BoardSize {
@@ -87,27 +90,29 @@ impl GenericBoard {
         }
     }
 
-    /// 指定マスの色を返す．範囲外なら `None`．
+    /// Returns the color at the given cell. `None` if empty or out of range.
     #[inline]
     #[must_use]
     pub fn cell(&self, coord: Coord) -> Option<Color> {
         self.index(coord).and_then(|i| self.cells[i])
     }
 
-    /// 指定マスを書き換える ( 範囲外なら何もしない)．テスト・初期化用．
+    /// Overwrites a cell (out-of-range coordinates are silently ignored).
+    /// Intended for tests and setup.
     pub fn set(&mut self, coord: Coord, color: Option<Color>) {
         if let Some(i) = self.index(coord) {
             self.cells[i] = color;
         }
     }
 
-    /// 範囲チェック済みの内部用 set．
+    /// Internal `set` that assumes the coordinate has already been
+    /// range-checked.
     fn set_unchecked(&mut self, coord: Coord, color: Option<Color>) {
         let i = (coord.row as usize) * (self.size.cols as usize) + (coord.col as usize);
         self.cells[i] = color;
     }
 
-    /// 指定色の石数を返す．
+    /// Returns the number of stones of the given color.
     #[must_use]
     pub fn count(&self, color: Color) -> u32 {
         self.cells
@@ -118,7 +123,7 @@ impl GenericBoard {
             .unwrap_or(u32::MAX)
     }
 
-    /// 空マス数を返す．
+    /// Returns the number of empty cells.
     #[must_use]
     pub fn empty_count(&self) -> u32 {
         self.cells
@@ -129,7 +134,7 @@ impl GenericBoard {
             .unwrap_or(u32::MAX)
     }
 
-    /// 指定色の合法手リストを返す．
+    /// Returns the legal moves for the given side.
     #[must_use]
     pub fn legal_moves(&self, side: Color) -> Vec<Move> {
         let cell_at = |r: u8, c: u8| self.cell(Coord::new(r, c));
@@ -139,7 +144,8 @@ impl GenericBoard {
             .collect()
     }
 
-    /// 着手を適用する．戻り値は反転した石の座標 Vec ( Pass の場合は空)．
+    /// Applies a move. Returns the coordinates of the flipped stones (empty
+    /// for `Pass`).
     pub fn apply(&mut self, side: Color, mv: Move) -> Result<Vec<Coord>, OthelloError> {
         match mv {
             Move::Pass => {
@@ -182,7 +188,7 @@ impl GenericBoard {
         }
     }
 
-    /// 合法手が 1 つでも存在するか ( 早期判定)．
+    /// Whether at least one legal move exists (with early exit).
     #[must_use]
     pub fn has_any_legal_move(&self, side: Color) -> bool {
         // legal_moves と同じロジックだが Vec を作らずに回す
@@ -207,7 +213,7 @@ impl GenericBoard {
         false
     }
 
-    /// 両者とも合法手なし ( 終局) かどうか．
+    /// Whether neither side has any legal moves (terminal state).
     #[must_use]
     pub fn is_terminal(&self) -> bool {
         !self.has_any_legal_move(Color::Black) && !self.has_any_legal_move(Color::White)

@@ -1,10 +1,14 @@
-//! ntest ( Edax / Egaroucid 寄り) 簡易プロトコル．
+//! ntest (Edax / Egaroucid-leaning) simplified protocol.
 //!
-//! - `set game <board_str>` で局面を盤面文字列で送る ( WTHOR 風)
-//! - `go` で着手要求 → 応答 `<coord>` ( 例 `D3`) または `pa` ( pass)
+//! - `set game <board_str>` sends the position as a board string
+//!   (WTHOR-style).
+//! - `go` requests a move; the response is `<coord>` (e.g. `D3`) or `pa`
+//!   (pass).
 //!
-//! 応答は 1 行で完結する単純化したプロトコル．実機 Edax の挙動と完全には合わないが，
-//! テスト用モックスクリプトとプロトコル層の分離検証目的としては十分．
+//! The protocol is simplified so that every response fits in one line.
+//! It does not match real Edax behaviour exactly, but it is sufficient
+//! for testing mock scripts and validating the protocol-layer
+//! abstraction.
 
 use super::protocol::{EngineProtocol, parse_gtp_coord};
 use crate::traits::PlayerError;
@@ -12,12 +16,12 @@ use othello_core::{BoardSize, Color, Coord, GameState, Move};
 use std::io::{BufRead, Write};
 use std::time::Duration;
 
-/// ntest プロトコル状態．
+/// State of the ntest protocol.
 #[derive(Debug, Default)]
 pub struct NtestProtocol;
 
 impl NtestProtocol {
-    /// 新規 ntest プロトコルインスタンス．
+    /// Creates a new `NtestProtocol` instance.
     #[must_use]
     pub fn new() -> Self {
         Self
@@ -73,12 +77,13 @@ impl EngineProtocol for NtestProtocol {
     }
 }
 
-/// 局面を ntest 風の盤面文字列に変換する．
+/// Encodes a position as an ntest-style board string.
 ///
-/// フォーマット: 64 文字 ( 8x8 想定) + ` <X|O>` ( 手番) ．
-/// `*` = 黒石，`O` = 白石，`-` = 空マス．例: `---------------------------O*------*O--------------------------- *`
+/// Format: 64 characters (assuming 8x8) followed by ` <X|O>` indicating
+/// the side to move. `*` = black stone, `O` = white stone, `-` = empty.
+/// Example: `---------------------------O*------*O--------------------------- *`
 ///
-/// 8x8 以外は文字列の長さがサイズ依存になる．
+/// For non-8x8 boards the string length depends on the size.
 fn encode_board(state: &GameState, side: Color) -> String {
     let size = state.board.size();
     let mut s = String::with_capacity((size.rows as usize) * (size.cols as usize) + 2);

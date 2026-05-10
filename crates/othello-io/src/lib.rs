@@ -1,14 +1,19 @@
 //! # othello-io
 //!
-//! Othello 棋譜の入出力．形式中立な [`GameRecord`] と，それに対する
-//! [`GameRecordReader`] / [`GameRecordWriter`] trait で抽象化する．
+//! Game-record I/O for Othello. Abstracts over formats with the
+//! format-neutral [`GameRecord`] together with the [`GameRecordReader`]
+//! and [`GameRecordWriter`] traits.
 //!
-//! ## サポート形式
+//! ## Supported formats
 //!
-//! - [`json`] — 自前 JSON ( タイムスタンプ・メタデータ込み)．設計書 §4.1 準拠．
-//! - [`ggf`] — Generic Game Format ( Othello サブセット)．設計書 §4.3 準拠．
-//! - [`wthor`] — WTHOR (.wtb) バイナリ形式．読込のみ．設計書 §4.4 準拠．
-//! - [`jsonl_log`] — 進行イベント JSONL ( 書込のみ)．設計書 §4.2 準拠．
+//! - [`json`] — Native JSON (with timestamps and metadata). Conforms to
+//!   §4.1 of the design document.
+//! - [`ggf`] — Generic Game Format (Othello subset). Conforms to §4.3
+//!   of the design document.
+//! - [`wthor`] — WTHOR (`.wtb`) binary format (read-only). Conforms to
+//!   §4.4 of the design document.
+//! - [`jsonl_log`] — Per-event JSONL log (write-only). Conforms to §4.2
+//!   of the design document.
 
 pub mod error;
 pub mod ggf;
@@ -32,7 +37,7 @@ pub use record::{
 pub use traits::{GameRecordReader, GameRecordWriter};
 pub use wthor::{WthorHeader, WthorReader};
 
-/// よく使う型を一括で導入するための prelude．
+/// Prelude that imports the commonly used types in one go.
 pub mod prelude {
     pub use crate::{
         GameEndEvent, GameMetadata, GameRecord, GameRecordReader, GameRecordWriter,

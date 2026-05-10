@@ -1,4 +1,4 @@
-//! `othello-cli` のサブコマンド群．
+//! Subcommands for `othello-cli`.
 
 pub mod benchmark;
 pub mod convert;
@@ -12,7 +12,7 @@ pub mod simulate;
 
 use othello_core::{Color, Coord, GameState, Move};
 
-/// 盤面と手番情報を ASCII で整形して返す．
+/// Format the board and side-to-move information as an ASCII string.
 pub fn render_board(state: &GameState) -> String {
     let size = state.board.size();
     let mut s = String::new();
@@ -39,13 +39,13 @@ pub fn render_board(state: &GameState) -> String {
     s
 }
 
-/// `Coord` を `"e4"` 形式の文字列に変換する．
+/// Convert a `Coord` into a string like `"e4"`.
 pub fn format_coord(c: Coord) -> String {
     let col_char = (b'a' + c.col) as char;
     format!("{}{}", col_char, c.row + 1)
 }
 
-/// `Move` の表示文字列．
+/// Display string for a `Move`.
 pub fn format_move(mv: Move) -> String {
     match mv {
         Move::Place(c) => format_coord(c),

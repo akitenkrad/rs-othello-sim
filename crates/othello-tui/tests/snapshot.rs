@@ -1,7 +1,8 @@
-//! TUI 描画結果のスナップショットテスト ( `insta` クレート使用)．
+//! Snapshot tests for the TUI's rendered output (uses the `insta` crate).
 //!
-//! `TestBackend` で描画した内容を文字列化し，`insta::assert_snapshot!` で固定する．
-//! 8×8 標準初期配置と 1 手後の局面でカバレッジを取る．
+//! Rendering through `TestBackend` is converted to a string and pinned
+//! with `insta::assert_snapshot!`. Coverage spans the standard 8x8 start
+//! position and the position after one move.
 
 use othello_core::{Coord, GameState, Move};
 use othello_tui::{AppMode, AppState, Cursor, EvaluatorEntry, EvaluatorOverlay, ui};

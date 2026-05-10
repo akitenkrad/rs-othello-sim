@@ -1,21 +1,24 @@
-//! 報酬設計．`Sparse` / `Dense` / カスタムをサポートする．
+//! Reward design. Supports `Sparse`, `Dense`, and custom reward functions.
 
 use othello_core::{Color, GameState};
 use serde::{Deserialize, Serialize};
 
-/// 組み込み報酬モード．
+/// Built-in reward modes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RewardMode {
-    /// 終局時のみ +1 ( 勝ち) / 0 ( 引き分け) / -1 ( 負け)．
+    /// Returns +1 (win) / 0 (draw) / -1 (loss) only at terminal states.
     Sparse,
-    /// 各手で石数差変化 ( own - opp の delta) を返す．終局時は最終差点 ( own - opp) を加算しない簡易版．
+    /// Returns the change in stone-count differential (delta of `own - opp`)
+    /// each move. A simplified variant that does not add the final
+    /// differential at termination.
     Dense,
 }
 
-/// カスタム報酬関数 trait．
+/// Trait for custom reward functions.
 pub trait RewardFn: Send {
-    /// `prev` から `next` への 1 手分の遷移と，`agent_color` 視点の終局フラグを受け取り，
-    /// その遷移に対するスカラー報酬を返す．
+    /// Receives a single transition from `prev` to `next` together with the
+    /// termination flag from the `agent_color` perspective and returns a
+    /// scalar reward for that transition.
     fn compute(
         &self,
         prev: &GameState,
@@ -25,7 +28,7 @@ pub trait RewardFn: Send {
     ) -> f32;
 }
 
-/// `RewardMode::Sparse` の実装．
+/// Implementation of `RewardMode::Sparse`.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SparseReward;
 
@@ -50,7 +53,8 @@ impl RewardFn for SparseReward {
     }
 }
 
-/// `RewardMode::Dense` の実装．石数差の delta を返す．
+/// Implementation of `RewardMode::Dense`. Returns the delta of the stone-
+/// count differential.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DenseReward;
 
@@ -80,7 +84,7 @@ impl RewardFn for DenseReward {
     }
 }
 
-/// `RewardMode` から `RewardFn` を選ぶヘルパ．
+/// Helper that selects a `RewardFn` from a `RewardMode`.
 #[must_use]
 pub fn make_reward_fn(mode: RewardMode) -> Box<dyn RewardFn> {
     match mode {

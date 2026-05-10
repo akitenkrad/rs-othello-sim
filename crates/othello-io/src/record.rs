@@ -1,25 +1,27 @@
-//! 形式中立な棋譜表現．[`GameRecord`] が JSON / GGF / WTHOR 等の中立的な内部表現となる．
+//! Format-neutral game-record representation. [`GameRecord`] is the
+//! shared internal representation used by JSON, GGF, WTHOR, etc.
 
 use chrono::{DateTime, FixedOffset};
 use othello_core::{BoardSize, Color, Move};
 use serde::{Deserialize, Serialize};
 
-/// 現行の自前 JSON スキーマバージョン．
+/// Current native JSON schema version.
 pub const SCHEMA_VERSION: &str = "1.0";
 
-/// 1 局の棋譜 ( 形式中立)．
+/// A single game record (format-neutral).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GameRecord {
-    /// スキーマバージョン文字列．
+    /// Schema version string.
     pub schema_version: String,
-    /// メタデータ．
+    /// Metadata.
     pub metadata: GameMetadata,
-    /// 着手列．
+    /// Move sequence.
     pub moves: Vec<MoveEntry>,
 }
 
 impl GameRecord {
-    /// `metadata` と `moves` から `schema_version` 既定値で構築する．
+    /// Builds a record from `metadata` and `moves`, using the default
+    /// `schema_version`.
     #[must_use]
     pub fn new(metadata: GameMetadata, moves: Vec<MoveEntry>) -> Self {
         Self {
@@ -30,45 +32,45 @@ impl GameRecord {
     }
 }
 
-/// 棋譜のメタデータ．
+/// Metadata for a game record.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GameMetadata {
-    /// ゲーム ID ( UUID v4 想定)．
+    /// Game ID (typically a UUID v4).
     pub id: String,
-    /// 開始時刻 ( タイムゾーン付き)．
+    /// Start timestamp (with time zone).
     pub started_at: DateTime<FixedOffset>,
-    /// 終了時刻 ( 進行中なら `None`)．
+    /// End timestamp (`None` if the game is still in progress).
     pub ended_at: Option<DateTime<FixedOffset>>,
-    /// 盤面サイズ．
+    /// Board size.
     pub board_size: BoardSize,
-    /// 黒白プレイヤー情報．
+    /// Player information for black and white.
     pub players: PlayerPair,
-    /// 結果 ( 進行中なら `None`)．
+    /// Game result (`None` if still in progress).
     pub result: Option<GameResultRecord>,
-    /// エンジンバージョン文字列．
+    /// Engine version string.
     pub engine_version: String,
 }
 
-/// 黒白プレイヤーの組．
+/// Pair of black and white players.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PlayerPair {
-    /// 黒プレイヤー．
+    /// Black player.
     pub black: PlayerInfo,
-    /// 白プレイヤー．
+    /// White player.
     pub white: PlayerInfo,
 }
 
-/// プレイヤー個別情報．
+/// Per-player information.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PlayerInfo {
-    /// プレイヤー名 ( `Player::name()` 由来)．
+    /// Player name (taken from `Player::name()`).
     pub name: String,
-    /// 任意のパラメータ ( seed や simulations 数等)．
+    /// Arbitrary parameters (e.g. seed, simulation count).
     pub params: serde_json::Value,
 }
 
 impl PlayerInfo {
-    /// パラメータなしで名前のみのプレイヤー情報を作る．
+    /// Builds a name-only `PlayerInfo` with empty parameters.
     #[must_use]
     pub fn just_name(name: impl Into<String>) -> Self {
         Self {
@@ -78,34 +80,34 @@ impl PlayerInfo {
     }
 }
 
-/// 終局結果の記録．
+/// Terminal result record.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GameResultRecord {
-    /// 勝者 ( 引き分けなら `None`)．
+    /// Winner (`None` for a draw).
     pub winner: Option<Color>,
-    /// 終局時の石数．
+    /// Stone counts at the end of the game.
     pub score: Score,
 }
 
-/// 終局時の石数．
+/// Stone counts at the end of a game.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Score {
-    /// 黒石数．
+    /// Black stone count.
     pub black: u32,
-    /// 白石数．
+    /// White stone count.
     pub white: u32,
 }
 
-/// 1 着手分のエントリ．
+/// One move-entry record.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MoveEntry {
-    /// 手数 ( 1 起点)．
+    /// Move number (1-based).
     pub n: u32,
-    /// 着手側．
+    /// Side that played the move.
     pub side: Color,
-    /// 着手 ( `Move::Place` または `Move::Pass`)．
+    /// The move (`Move::Place` or `Move::Pass`).
     #[serde(rename = "move")]
     pub r#move: Move,
-    /// 着手時刻．
+    /// Timestamp of the move.
     pub ts: DateTime<FixedOffset>,
 }

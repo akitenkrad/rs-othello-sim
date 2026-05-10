@@ -1,4 +1,4 @@
-//! Observe モード ( AI 対戦観戦) のロジック．
+//! Observe mode (watch an AI vs AI match) logic.
 
 use crate::app::{
     AppMode, AppState, Cursor, EvaluatorEntry, EvaluatorOverlay, format_move_history,
@@ -7,34 +7,35 @@ use crate::input::Action;
 use othello_core::{BoardSize, Color, Coord, GameState, Move, OthelloError};
 use othello_player::Player;
 
-/// Observe モードのバックエンド設定．
+/// Backend configuration for Observe mode.
 pub struct ObserveBackend {
-    /// 黒プレイヤー ( 内部で `select_move` が呼ばれる)．
+    /// Black player (its `select_move` is invoked internally).
     pub black: Box<dyn Player>,
-    /// 白プレイヤー．
+    /// White player.
     pub white: Box<dyn Player>,
-    /// 表示用プレイヤー名 ( black, white)．
+    /// Display names for the players (black, white).
     pub names: (String, String),
 }
 
-/// Observe モード状態．
+/// Observe mode state.
 pub struct ObserveMode {
     state: GameState,
     moves: Vec<(Color, Move)>,
     backend: ObserveBackend,
-    /// 自動再生間隔 ( ms)．`0` は手動進行のみ．
+    /// Auto-play interval in milliseconds. `0` means manual stepping only.
     pub auto_delay_ms: u64,
-    /// 自動再生中フラグ．
+    /// Whether auto-play is active.
     pub auto_play: bool,
     finished: bool,
     message: String,
-    /// 直近 `select_move` 後に取得した evaluator overlay．
-    /// `select_move` 中の中間状態は反映しない ( 完了時にのみ更新)．
+    /// Evaluator overlay captured after the most recent `select_move`.
+    /// Intermediate states during `select_move` are not reflected (only
+    /// updated on completion).
     last_overlay: Option<EvaluatorOverlay>,
 }
 
 impl ObserveMode {
-    /// 標準初期局面で Observe モードを開始する．
+    /// Starts Observe mode from the standard initial position.
     pub fn new(
         board_size: BoardSize,
         backend: ObserveBackend,
@@ -45,7 +46,7 @@ impl ObserveMode {
         let message = if auto_play {
             format!("Auto-play [{}ms]", auto_delay_ms)
         } else {
-            format!("{:?} to move ( Space=step)", state.side_to_move)
+            format!("{:?} to move (Space=step)", state.side_to_move)
         };
         Ok(Self {
             state,
@@ -59,7 +60,7 @@ impl ObserveMode {
         })
     }
 
-    /// 1 アクションを処理する．
+    /// Handles a single action.
     pub fn handle(&mut self, action: Action) {
         match action {
             Action::StepForward => {
@@ -70,7 +71,7 @@ impl ObserveMode {
                 self.message = if self.auto_play {
                     format!("Auto-play [{}ms]", self.auto_delay_ms.max(1))
                 } else {
-                    format!("{:?} to move ( Space=step)", self.state.side_to_move)
+                    format!("{:?} to move (Space=step)", self.state.side_to_move)
                 };
             }
             Action::IncreaseDelay => {
@@ -85,7 +86,8 @@ impl ObserveMode {
         }
     }
 
-    /// 1 手だけ進める ( 内部状態を更新)．戻り値: 進めたか．
+    /// Advances by one move, updating internal state. Returns whether a move
+    /// was made.
     pub fn advance_one(&mut self) -> bool {
         if self.finished {
             return false;
@@ -127,7 +129,7 @@ impl ObserveMode {
                     }
                 } else {
                     self.message = format!(
-                        "Move {}: {:?} played ( {:?} to move)",
+                        "Move {}: {:?} played ({:?} to move)",
                         self.state.move_number, side, self.state.side_to_move
                     );
                 }
@@ -141,13 +143,13 @@ impl ObserveMode {
         }
     }
 
-    /// 終局しているか．
+    /// Whether the game has ended.
     #[must_use]
     pub fn is_finished(&self) -> bool {
         self.finished
     }
 
-    /// 描画用スナップショットを生成する．
+    /// Builds a snapshot for rendering.
     #[must_use]
     pub fn snapshot(&self) -> AppState {
         let cursor = Cursor::center(&self.state);
@@ -167,9 +169,10 @@ impl ObserveMode {
     }
 }
 
-/// `side` のプレイヤーから evaluator overlay を取得する．
+/// Collects the evaluator overlay for the player on `side`.
 ///
-/// プレイヤーが [`Evaluator`] 未対応の場合や，評価が空の場合は `None`．
+/// Returns `None` if the player does not implement [`Evaluator`] or the
+/// evaluation result is empty.
 fn collect_overlay(side: Color, backend: &mut ObserveBackend) -> Option<EvaluatorOverlay> {
     let player: &mut Box<dyn Player> = match side {
         Color::Black => &mut backend.black,

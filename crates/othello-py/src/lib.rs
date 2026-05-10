@@ -175,7 +175,7 @@ impl PyOthelloEnv {
         Ok((obs_py, r.reward, r.terminated, r.truncated, info_py))
     }
 
-    /// 合法 Action のリストを返す ( Python list of int)．
+    /// Returns the list of legal actions (a Python list of int).
     pub fn legal_actions<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         let actions = self.inner.legal_actions();
         let list = PyList::empty_bound(py);
@@ -185,23 +185,23 @@ impl PyOthelloEnv {
         Ok(list)
     }
 
-    /// 合法手マスク ( numpy bool array)．
+    /// Returns the legal-move mask (NumPy bool array).
     pub fn action_mask<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<bool>> {
         self.inner.action_mask().into_pyarray_bound(py)
     }
 
-    /// ASCII 描画．
+    /// Renders the board as ASCII.
     pub fn render(&self) -> String {
         self.inner.render()
     }
 
-    /// `Action` 空間サイズ ( 整数)．
+    /// Action-space size (integer).
     #[getter]
     pub fn action_space_size(&self) -> u32 {
         Action::space_size(self.inner.config().board_size)
     }
 
-    /// 盤面サイズ ( 整数)．
+    /// Board size (integer).
     #[getter]
     pub fn board_size(&self) -> u8 {
         self.inner.config().board_size.rows
@@ -257,12 +257,12 @@ impl PyOthelloMultiEnv {
         Ok(dict)
     }
 
-    /// 現手番 agent ( "black" | "white")．
+    /// Current side-to-move agent (`"black"` or `"white"`).
     pub fn current_agent(&self) -> String {
         self.inner.current_agent()
     }
 
-    /// 全 agent の ID リスト．
+    /// List of all agent IDs.
     pub fn agents<'py>(&self, py: Python<'py>) -> Bound<'py, PyList> {
         let list = PyList::empty_bound(py);
         for a in self.inner.agents() {
@@ -271,12 +271,12 @@ impl PyOthelloMultiEnv {
         list
     }
 
-    /// 指定 agent の観測．
+    /// Observation for the given agent.
     pub fn observe<'py>(&self, py: Python<'py>, agent: &str) -> PyResult<Bound<'py, PyAny>> {
         observation_to_py(py, self.inner.observe(agent))
     }
 
-    /// 指定 agent の合法手マスク．
+    /// Legal-move mask for the given agent.
     pub fn action_mask<'py>(&self, py: Python<'py>, agent: &str) -> Bound<'py, PyArray1<bool>> {
         self.inner.action_mask(agent).into_pyarray_bound(py)
     }

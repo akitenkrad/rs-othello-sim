@@ -1,4 +1,4 @@
-//! `selfplay` サブコマンド: バッチ self-play 実行 ( BatchRunner)．
+//! `selfplay` subcommand: run batch self-play via `BatchRunner`.
 
 use anyhow::{Context, Result};
 use chrono::Local;
@@ -12,67 +12,67 @@ use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-/// 棋譜出力フォーマット ( selfplay)．現状は JSON のみサポート．
+/// Game-record output format for selfplay (currently JSON only).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum SaveRecordsFormat {
-    /// 自前 JSON 形式 ( 1 局 1 ファイル)．
+    /// Native JSON format (one file per game).
     Json,
 }
 
-/// `othello-cli selfplay` の引数．
+/// Arguments for `othello-cli selfplay`.
 #[derive(Debug, ClapArgs)]
 pub struct Args {
-    /// 盤面サイズ．
+    /// Board size.
     #[arg(long, default_value_t = 8)]
     pub board_size: u8,
 
-    /// 試合数．
+    /// Number of games to play.
     #[arg(long, default_value_t = 100)]
     pub num_games: usize,
 
-    /// 並列スレッド数 ( 0 = 論理コア数)．
+    /// Number of parallel threads (0 = use all logical cores).
     #[arg(long, default_value_t = 0)]
     pub threads: usize,
 
-    /// 黒プレイヤー SPEC ( 例 `random:seed=1`，`greedy`，`mcts:200`)．
+    /// Black player SPEC (e.g. `random:seed=1`, `greedy`, `mcts:200`).
     #[arg(long, default_value = "random")]
     pub black: String,
 
-    /// 白プレイヤー SPEC．
+    /// White player SPEC.
     #[arg(long, default_value = "random")]
     pub white: String,
 
-    /// 乱数 seed ( 各局には `seed + game_index` が渡る)．
+    /// Random seed (each game receives `seed + game_index`).
     #[arg(long)]
     pub seed: Option<u64>,
 
-    /// 各ゲームの JSON 棋譜を保存するディレクトリ．
-    /// `auto` を指定すると `runs/selfplay_YYYYMMDD_HHMMSS/` に自動生成する．
+    /// Directory in which to save the per-game JSON records.
+    /// Pass `auto` to auto-generate `runs/selfplay_YYYYMMDD_HHMMSS/`.
     #[arg(long)]
     pub log_dir: Option<String>,
 
-    /// 全局を集約する JSONL ログのパス．
+    /// Path of the aggregated JSONL log spanning all games.
     #[arg(long)]
     pub jsonl_log: Option<PathBuf>,
 
-    /// 黒白を偶奇で入れ替える．
+    /// Swap black and white on alternate game indices.
     #[arg(long, default_value_t = false)]
     pub swap_colors: bool,
 
-    /// 棋譜の保存フォーマット ( `--log-dir` 指定時のみ意味あり)．
+    /// Game-record format used when `--log-dir` is set.
     #[arg(long, value_enum, default_value_t = SaveRecordsFormat::Json)]
     pub save_records: SaveRecordsFormat,
 
-    /// 安全装置 ( この手数を超えたらエラー停止)．
+    /// Safety cap: abort with an error if a game exceeds this many moves.
     #[arg(long)]
     pub max_moves: Option<u32>,
 
-    /// 進捗バーを表示しない ( デフォルト: stderr が tty なら表示)．
+    /// Suppress the progress bar (otherwise shown when stderr is a TTY).
     #[arg(long, default_value_t = false)]
     pub no_progress: bool,
 }
 
-/// `indicatif::ProgressBar` を [`ProgressCallback`] でラップする実装．
+/// [`ProgressCallback`] implementation backed by `indicatif::ProgressBar`.
 struct IndicatifProgress {
     bar: ProgressBar,
 }
@@ -92,7 +92,7 @@ impl ProgressCallback for IndicatifProgress {
     }
 }
 
-/// `selfplay` 実行関数．
+/// Entry point for `selfplay`.
 pub fn run(args: Args) -> Result<()> {
     let board_size = BoardSize::square(args.board_size);
 
@@ -203,10 +203,11 @@ pub fn run(args: Args) -> Result<()> {
     Ok(())
 }
 
-/// SPEC + seed から `(black_player, white_player)` を生成する factory．
+/// Factory that turns SPEC plus seed into `(black_player, white_player)`.
 ///
-/// 各ゲームの seed は `BatchRunner` から渡される値に，SPEC の seed を XOR して撹拌する．
-/// `Nn` バリアント ( Phase 6.4) は `othello-cli` の wrapper を経由する．
+/// The seed for each game is the value supplied by `BatchRunner` XORed with
+/// the seed from the SPEC. The `Nn` variant (Phase 6.4) is routed through
+/// the `othello-cli` wrapper.
 fn make_factory(
     black_spec: &PlayerSpec,
     white_spec: &PlayerSpec,

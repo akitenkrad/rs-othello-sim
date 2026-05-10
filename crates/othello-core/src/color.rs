@@ -1,18 +1,18 @@
-//! 石の色を表す [`Color`] enum．
+//! [`Color`] enum representing stone color.
 
 use serde::{Deserialize, Serialize};
 
-/// 石の色．Othello には黒と白の 2 色のみ存在する．
+/// Stone color. Othello uses only black and white.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Color {
-    /// 黒石 ( 先手)．
+    /// Black stone (first player).
     Black,
-    /// 白石 ( 後手)．
+    /// White stone (second player).
     White,
 }
 
 impl Color {
-    /// 相手の色を返す．`Black ↔ White`．
+    /// Returns the opposing color: `Black ↔ White`.
     ///
     /// ```
     /// use othello_core::Color;
@@ -28,7 +28,7 @@ impl Color {
         }
     }
 
-    /// 表示用の 1 文字記号を返す．Black = `'X'`，White = `'O'`．
+    /// Returns a one-character display symbol. Black = `'X'`, White = `'O'`.
     #[inline]
     #[must_use]
     pub const fn glyph(self) -> char {

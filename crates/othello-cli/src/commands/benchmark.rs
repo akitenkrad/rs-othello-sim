@@ -1,4 +1,4 @@
-//! `benchmark` サブコマンド: 単純な ホットループ計測 ( criterion ではない簡易版)．
+//! `benchmark` subcommand: simple hot-loop measurements (a lightweight alternative to criterion).
 
 use anyhow::{Result, bail};
 use clap::{Args as ClapArgs, ValueEnum};
@@ -6,30 +6,30 @@ use othello_core::{BoardSize, Color, GameState, Move};
 use othello_player::{Player, RandomPlayer};
 use std::time::{Duration, Instant};
 
-/// ベンチ対象．
+/// Benchmark target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum Target {
-    /// 合法手生成のスループット ( bitboard / generic に応じて自動選択)．
+    /// Legal-move generation throughput (auto-selects bitboard or generic).
     LegalMoves,
-    /// Random vs Random self-play の手数あたりスループット．
+    /// Per-move throughput for Random vs Random self-play.
     SelfPlay,
 }
 
-/// `othello-cli benchmark` の引数．
+/// Arguments for `othello-cli benchmark`.
 #[derive(Debug, ClapArgs)]
 pub struct Args {
-    /// ベンチ対象．
+    /// Benchmark target.
     #[arg(long, value_enum)]
     pub target: Target,
-    /// 計測時間 ( 秒)．
+    /// Measurement duration in seconds.
     #[arg(long, default_value_t = 5.0)]
     pub duration: f64,
-    /// 盤面サイズ ( self-play 用)．
+    /// Board size (used for self-play).
     #[arg(long, default_value_t = 8)]
     pub board_size: u8,
 }
 
-/// `benchmark` 実行関数．
+/// Entry point for `benchmark`.
 pub fn run(args: Args) -> Result<()> {
     if args.duration <= 0.0 {
         bail!("--duration must be > 0");
@@ -128,7 +128,7 @@ fn bench_self_play(dur: Duration, board_size: u8) -> Result<()> {
     Ok(())
 }
 
-/// 12345678 -> "12_345_678" のように 3 桁ごとに `_` 区切りに整形する．
+/// Format a number with `_` as a thousands separator (e.g. 12345678 -> "12_345_678").
 fn format_with_underscores(n: u64) -> String {
     let s = n.to_string();
     let bytes = s.as_bytes();

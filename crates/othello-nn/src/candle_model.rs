@@ -1,18 +1,18 @@
-//! Candle ベースの ResNet 風 policy/value モデル．
+//! Candle-based ResNet-style policy/value model.
 //!
-//! ## アーキテクチャ
+//! ## Architecture
 //!
 //! ```text
 //! input (B, 3, H, W)
-//!   → conv 3x3 (3 → CHANNELS) → BN → ReLU       (stem)
-//!   → 2 × ResidualBlock (CHANNELS, CHANNELS)
-//!   ├─ policy head: conv 1x1 (CHANNELS → 2) → BN → ReLU → Linear(2*H*W → H*W + 1)
-//!   └─ value head:  conv 1x1 (CHANNELS → 1) → BN → ReLU → Linear(H*W → 64) → ReLU → Linear(64 → 1) → tanh
+//!   -> conv 3x3 (3 -> CHANNELS) -> BN -> ReLU       (stem)
+//!   -> 2 x ResidualBlock (CHANNELS, CHANNELS)
+//!   |- policy head: conv 1x1 (CHANNELS -> 2) -> BN -> ReLU -> Linear(2*H*W -> H*W + 1)
+//!   |- value head:  conv 1x1 (CHANNELS -> 1) -> BN -> ReLU -> Linear(H*W -> 64) -> ReLU -> Linear(64 -> 1) -> tanh
 //! ```
 //!
-//! 学習済モデルは Phase 6.4 では提供しない．ランダム初期化重みでロードする
-//! [`CandleModel::random_init`] と，safetensors からのロード
-//! [`CandleModel::from_safetensors`] のみを提供する．
+//! Phase 6.4 does not ship a trained model. The crate only exposes
+//! [`CandleModel::random_init`] (random-initialized weights) and
+//! [`CandleModel::from_safetensors`] (load from a safetensors file).
 
 use crate::error::NnError;
 use crate::model::NnModel;
@@ -28,7 +28,7 @@ const CHANNELS: usize = 32;
 const NUM_RES_BLOCKS: usize = 2;
 const VALUE_HIDDEN: usize = 64;
 
-/// 1 つの residual block ( conv-BN-ReLU-conv-BN + skip → ReLU)．
+/// One residual block (conv-BN-ReLU-conv-BN + skip -> ReLU).
 struct ResidualBlock {
     conv1: Conv2d,
     bn1: BatchNorm,
@@ -66,7 +66,7 @@ impl ResidualBlock {
     }
 }
 
-/// Candle で書かれた ResNet 風 policy/value モデル．
+/// ResNet-style policy/value model implemented in Candle.
 pub struct CandleModel {
     stem_conv: Conv2d,
     stem_bn: BatchNorm,
@@ -80,28 +80,31 @@ pub struct CandleModel {
     value_linear2: Linear,
     board_size: BoardSize,
     device: Device,
-    /// 学習用ではなく inference 用に重みを保持しておくためのハンドル．
-    /// `Drop` での重み解放を遅らせるためだけに保有する．
+    /// Handle that retains the weights for inference. Held purely to
+    /// defer weight deallocation until `Drop`.
     _varmap: VarMap,
 }
 
 impl CandleModel {
-    /// 全ての重みを Candle のデフォルト初期化で乱数生成する．テスト用．
+    /// Initializes every weight randomly via Candle's default
+    /// initializer (intended for tests).
     ///
-    /// `seed` は将来 deterministic init をしたい場合の予約．現状 candle の
-    /// `VarMap::all_vars` は **deterministic でない** 初期化を行うので，本パラメータは
-    /// 内部的には使わない ( 互換のため API として残す)．
+    /// `seed` is reserved for a future deterministic-init path.
+    /// Currently `VarMap::all_vars` in candle uses **non-deterministic**
+    /// initialization, so the parameter is kept in the API for
+    /// compatibility but is not used internally.
     pub fn random_init(board_size: BoardSize, _seed: u64, device: Device) -> Result<Self, NnError> {
         let varmap = VarMap::new();
         let vb = VarBuilder::from_varmap(&varmap, DType::F32, &device);
         Self::build(board_size, device, varmap, vb)
     }
 
-    /// safetensors ファイルから重みを読み込む．
+    /// Loads weights from a safetensors file.
     ///
-    /// 保存時の名前空間は本実装の `pp(...)` 階層と一致する必要がある:
-    /// `stem_conv.weight`, `stem_bn.{weight,bias,running_mean,running_var}`,
-    /// `block_{i}.conv1.weight`, ... など．
+    /// The saved tensor names must match the `pp(...)` hierarchy used
+    /// here, e.g. `stem_conv.weight`,
+    /// `stem_bn.{weight,bias,running_mean,running_var}`,
+    /// `block_{i}.conv1.weight`, etc.
     pub fn from_safetensors<P: AsRef<Path>>(
         path: P,
         board_size: BoardSize,

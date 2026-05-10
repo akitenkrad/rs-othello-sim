@@ -1,28 +1,29 @@
-//! 1 手を表す [`Move`] enum．
+//! [`Move`] enum representing a single move.
 
 use crate::coord::Coord;
 use serde::{Deserialize, Serialize};
 
-/// 1 手の入力．石を置く `Place(Coord)` か，パスする `Pass`．
+/// A single move input: place a stone via `Place(Coord)` or pass via `Pass`.
 ///
-/// 合法手が存在するときに `Pass` を要求した場合は不正手としてエラーになる．
+/// Requesting `Pass` when legal moves exist is treated as an illegal move
+/// and yields an error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Move {
-    /// 指定座標に石を置く．
+    /// Place a stone at the given coordinate.
     Place(Coord),
-    /// パスする ( 合法手がない場合のみ正当)．
+    /// Pass (legal only when there is no legal placement).
     Pass,
 }
 
 impl Move {
-    /// パスかどうか．
+    /// Whether the move is a pass.
     #[inline]
     #[must_use]
     pub const fn is_pass(self) -> bool {
         matches!(self, Self::Pass)
     }
 
-    /// `Place(coord)` の座標を取り出す．`Pass` の場合は `None`．
+    /// Returns the coordinate of `Place(coord)`, or `None` for `Pass`.
     #[inline]
     #[must_use]
     pub const fn coord(self) -> Option<Coord> {

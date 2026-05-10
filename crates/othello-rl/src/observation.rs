@@ -1,37 +1,40 @@
-//! 観測 ( [`Observation`]) の表現．
+//! [`Observation`] representations.
 //!
-//! - [`Observation::Planes`] — 3 channels (own / opp / legal mask)，shape `[3, H, W]`
-//! - [`Observation::Flat`] — `Planes` を flatten したベクトル，shape `[3*H*W]`
-//! - [`Observation::MoveSequence`] — 手順序列 ( 1-indexed `1..=H*W`，Pass は 0)
+//! - [`Observation::Planes`] — three channels (own / opp / legal mask),
+//!   shape `[3, H, W]`.
+//! - [`Observation::Flat`] — flattened version of `Planes`, shape
+//!   `[3*H*W]`.
+//! - [`Observation::MoveSequence`] — move-history sequence (1-indexed
+//!   `1..=H*W`, Pass = 0).
 
 use ndarray::{Array1, Array3};
 use othello_core::{BoardSize, Color, Coord, GameState, Move};
 use serde::{Deserialize, Serialize};
 
-/// 観測形式の選択．
+/// Observation format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ObservationType {
-    /// `[3, H, W]` の `f32` テンソル．
+    /// `[3, H, W]` `f32` tensor.
     Planes,
-    /// `[3*H*W]` の `f32` ベクトル．
+    /// `[3*H*W]` `f32` vector.
     Flat,
-    /// 手順序列 ( 1-indexed)．Pass は 0．
+    /// Move-history sequence (1-indexed). Pass is encoded as 0.
     MoveSequence,
 }
 
-/// 観測．
+/// Observation value.
 #[derive(Debug, Clone)]
 pub enum Observation {
-    /// `[3, H, W]` テンソル．
+    /// `[3, H, W]` tensor.
     Planes(Array3<f32>),
-    /// flatten ベクトル．
+    /// Flattened vector.
     Flat(Array1<f32>),
-    /// 手順序列 ( 1-indexed)．
+    /// Move-history sequence (1-indexed).
     MoveSequence(Vec<u16>),
 }
 
 impl Observation {
-    /// shape を返す ( デバッグ用)．
+    /// Returns the observation shape (useful for debugging).
     #[must_use]
     pub fn shape(&self) -> Vec<usize> {
         match self {
@@ -42,10 +45,11 @@ impl Observation {
     }
 }
 
-/// `state` に対する `view_color` 視点の観測を `ty` 形式で生成する．
+/// Builds an observation of `state` from the `view_color` perspective in
+/// the `ty` format.
 ///
-/// `history` は `MoveSequence` のときに参照される ( 着手列)．
-/// `Planes` / `Flat` では使用しない．
+/// `history` (the sequence of moves) is consulted only for `MoveSequence`.
+/// It is not used by `Planes` / `Flat`.
 #[must_use]
 pub fn make_observation(
     state: &GameState,

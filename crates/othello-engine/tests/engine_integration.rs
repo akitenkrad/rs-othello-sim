@@ -1,4 +1,4 @@
-//! GameEngine の統合テスト．
+//! Integration tests for `GameEngine`.
 
 use othello_core::prelude::*;
 use othello_engine::prelude::*;

@@ -1,43 +1,45 @@
-//! Replay モード ( 棋譜再生) のロジック．
+//! Replay mode (record replay) logic.
 
 use crate::app::{AppMode, AppState, Cursor, format_move_history};
 use crate::input::Action;
 use othello_core::{Color, Move};
 use othello_engine::GameHistory;
 
-/// 自動再生間隔の下限・上限・刻み ( ミリ秒)．
+/// Lower/upper bounds and step (milliseconds) for the auto-play interval.
 const AUTO_DELAY_MIN_MS: u64 = 50;
 const AUTO_DELAY_MAX_MS: u64 = 5_000;
 const AUTO_DELAY_STEP_MS: u64 = 100;
 
-/// 自動再生間隔のデフォルト ( ミリ秒)．500 ms = 2 手/秒．
+/// Default auto-play interval in milliseconds (500 ms = 2 moves/sec).
 pub const DEFAULT_AUTO_DELAY_MS: u64 = 500;
 
 fn clamp_delay(ms: u64) -> u64 {
     ms.clamp(AUTO_DELAY_MIN_MS, AUTO_DELAY_MAX_MS)
 }
 
-/// Replay モード状態．
+/// Replay mode state.
 #[derive(Debug)]
 pub struct ReplayMode {
     history: GameHistory,
     cursor: usize,
-    /// 自動再生中ならば `true`．`Action::ToggleAutoPlay` で切り替わる．
+    /// `true` while auto-play is active. Toggled by `Action::ToggleAutoPlay`.
     pub auto_play: bool,
-    /// 自動再生時の手間隔 ( ミリ秒)．`Action::IncreaseDelay` / `DecreaseDelay` で増減．
+    /// Auto-play step interval in milliseconds. Changed via
+    /// `Action::IncreaseDelay` / `DecreaseDelay`.
     pub auto_delay_ms: u64,
     moves: Vec<(Color, Move)>,
     players: (String, String),
 }
 
 impl ReplayMode {
-    /// 履歴を消費して Replay モードを開始する ( デフォルト設定: 手動進行)．
+    /// Consumes a history and starts Replay mode (default: manual stepping).
     #[must_use]
     pub fn new(history: GameHistory) -> Self {
         Self::with_options(history, false, DEFAULT_AUTO_DELAY_MS)
     }
 
-    /// 履歴を消費して Replay モードを開始する．`auto_play` の初期値と再生間隔を指定する．
+    /// Consumes a history and starts Replay mode with the given initial
+    /// `auto_play` flag and auto-play interval.
     #[must_use]
     pub fn with_options(history: GameHistory, auto_play: bool, auto_delay_ms: u64) -> Self {
         let moves = build_move_log(&history);
@@ -51,18 +53,18 @@ impl ReplayMode {
         }
     }
 
-    /// プレイヤー名を設定する ( 表示用)．
+    /// Sets the player names (used for display).
     pub fn set_players(&mut self, black: impl Into<String>, white: impl Into<String>) {
         self.players = (black.into(), white.into());
     }
 
-    /// 終局位置 ( 最終手後) に居るか．
+    /// Whether the cursor is at the end position (after the last move).
     #[must_use]
     pub fn is_finished(&self) -> bool {
         self.cursor == self.history.total_moves()
     }
 
-    /// 1 アクションを処理する．
+    /// Handles a single action.
     pub fn handle(&mut self, action: Action) {
         match action {
             Action::StepForward => {
@@ -101,7 +103,8 @@ impl ReplayMode {
         }
     }
 
-    /// 自動再生の駆動側から呼ぶヘルパ．1 手進めて，終局に達したら auto_play を OFF にする．
+    /// Helper used by the auto-play driver. Advances by one move and turns
+    /// `auto_play` off once the end is reached.
     pub fn auto_advance(&mut self) {
         if self.cursor < self.history.total_moves() {
             self.cursor += 1;
@@ -111,14 +114,14 @@ impl ReplayMode {
         }
     }
 
-    /// 任意手数にジャンプする ( 範囲外は無視)．
+    /// Jumps to the given move number (out-of-range values are ignored).
     pub fn jump_to(&mut self, n: usize) {
         if n <= self.history.total_moves() {
             self.cursor = n;
         }
     }
 
-    /// 描画用スナップショットを生成する．
+    /// Builds a snapshot for rendering.
     #[must_use]
     pub fn snapshot(&self) -> AppState {
         let state = self
@@ -151,7 +154,7 @@ impl ReplayMode {
         }
     }
 
-    /// テスト用: カーソル位置を返す．
+    /// Test-only: returns the current cursor position.
     #[must_use]
     pub fn cursor(&self) -> usize {
         self.cursor

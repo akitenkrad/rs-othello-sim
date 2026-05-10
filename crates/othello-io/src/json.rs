@@ -1,16 +1,18 @@
-//! 自前 JSON 形式の棋譜 Reader/Writer．設計書 §4.1 のスキーマ通りに `serde_json` を用いる．
+//! Reader/Writer for the native JSON game-record format. Uses
+//! `serde_json` against the schema defined in §4.1 of the design
+//! document.
 
 use crate::error::IoError;
 use crate::record::GameRecord;
 use crate::traits::{GameRecordReader, GameRecordWriter};
 use std::io::{Read, Write};
 
-/// JSON 棋譜 Reader．
+/// JSON game-record reader.
 #[derive(Debug, Default)]
 pub struct JsonReader;
 
 impl JsonReader {
-    /// 新規生成．
+    /// Constructs a new reader.
     #[must_use]
     pub fn new() -> Self {
         Self
@@ -36,12 +38,12 @@ impl GameRecordReader for JsonReader {
     }
 }
 
-/// JSON 棋譜 Writer ( pretty-print)．
+/// JSON game-record writer (pretty-printed output).
 #[derive(Debug, Default)]
 pub struct JsonWriter;
 
 impl JsonWriter {
-    /// 新規生成．
+    /// Constructs a new writer.
     #[must_use]
     pub fn new() -> Self {
         Self

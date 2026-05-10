@@ -1,4 +1,4 @@
-//! ハイブリッド盤面 [`Board`]．8×8 では [`Bitboard8`]，それ以外は [`GenericBoard`] を使用する．
+//! Hybrid [`Board`]. Uses [`Bitboard8`] for 8x8 and [`GenericBoard`] otherwise.
 
 use crate::bitboard::Bitboard8;
 use crate::color::Color;
@@ -8,20 +8,20 @@ use crate::generic_board::GenericBoard;
 use crate::mv::Move;
 use serde::{Deserialize, Serialize};
 
-/// 盤面サイズ ( 行数 × 列数)．
+/// Board dimensions (rows x columns).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BoardSize {
-    /// 行数 ( 4..=26)．
+    /// Number of rows (4..=26).
     pub rows: u8,
-    /// 列数 ( 4..=26)．
+    /// Number of columns (4..=26).
     pub cols: u8,
 }
 
 impl BoardSize {
-    /// 標準的な 8×8 サイズ．
+    /// Standard 8x8 size.
     pub const STANDARD: Self = Self { rows: 8, cols: 8 };
 
-    /// `n × n` の正方形盤面．
+    /// Square board of `n × n`.
     #[inline]
     #[must_use]
     pub const fn square(n: u8) -> Self {
@@ -29,19 +29,19 @@ impl BoardSize {
     }
 }
 
-/// ハイブリッド盤面．8×8 のときは bitboard，それ以外は汎用実装が選ばれる．
+/// Hybrid board: bitboard for 8x8, generic implementation otherwise.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Board {
-    /// 8×8 専用 bitboard 表現 ( 高速)．
+    /// 8x8-specific bitboard representation (fast).
     Bitboard8(Bitboard8),
-    /// 任意 N×M サイズ ( 柔軟)．
+    /// Generic N×M representation (flexible).
     Generic(GenericBoard),
 }
 
 impl Board {
-    /// 指定サイズの空盤面を生成する．
+    /// Constructs an empty board of the given size.
     ///
-    /// 8×8 のときは [`Bitboard8`]，それ以外は [`GenericBoard`] を選択する．
+    /// Selects [`Bitboard8`] for 8x8 and [`GenericBoard`] otherwise.
     pub fn new(size: BoardSize) -> Result<Self, OthelloError> {
         if size.rows == 8 && size.cols == 8 {
             Ok(Self::Bitboard8(Bitboard8::empty()))
@@ -50,7 +50,7 @@ impl Board {
         }
     }
 
-    /// 指定サイズの **標準初期配置** 盤面を生成する．
+    /// Constructs a board of the given size with the **standard initial position**.
     pub fn standard(size: BoardSize) -> Result<Self, OthelloError> {
         if size.rows == 8 && size.cols == 8 {
             Ok(Self::Bitboard8(Bitboard8::standard()))
@@ -59,14 +59,14 @@ impl Board {
         }
     }
 
-    /// 標準 8×8 初期配置 ( shorthand)．
+    /// Standard 8x8 initial position (shorthand).
     #[inline]
     #[must_use]
     pub fn standard_8x8() -> Self {
         Self::Bitboard8(Bitboard8::standard())
     }
 
-    /// 盤面サイズを返す．
+    /// Returns the board size.
     #[inline]
     #[must_use]
     pub fn size(&self) -> BoardSize {
@@ -76,7 +76,8 @@ impl Board {
         }
     }
 
-    /// 指定マスの色を返す．空マスや範囲外は `None`．
+    /// Returns the color at the given cell. `None` if the cell is empty or
+    /// out of range.
     #[inline]
     #[must_use]
     pub fn cell(&self, coord: Coord) -> Option<Color> {
@@ -86,7 +87,7 @@ impl Board {
         }
     }
 
-    /// 指定色の石数を返す．
+    /// Returns the number of stones of the given color.
     #[inline]
     #[must_use]
     pub fn count(&self, color: Color) -> u32 {
@@ -96,7 +97,7 @@ impl Board {
         }
     }
 
-    /// 空マス数を返す．
+    /// Returns the number of empty cells.
     #[inline]
     #[must_use]
     pub fn empty_count(&self) -> u32 {
@@ -106,7 +107,7 @@ impl Board {
         }
     }
 
-    /// 指定色の合法手リストを返す．
+    /// Returns the legal moves for the given side.
     #[must_use]
     pub fn legal_moves(&self, side: Color) -> Vec<Move> {
         match self {
@@ -115,7 +116,7 @@ impl Board {
         }
     }
 
-    /// 合法手が 1 つでも存在するかどうか．
+    /// Whether at least one legal move exists.
     #[must_use]
     pub fn has_any_legal_move(&self, side: Color) -> bool {
         match self {
@@ -124,7 +125,7 @@ impl Board {
         }
     }
 
-    /// 着手を適用する．成功時は反転した石の座標 Vec を返す．
+    /// Applies a move. On success, returns the coordinates of the flipped stones.
     pub fn apply(&mut self, side: Color, mv: Move) -> Result<Vec<Coord>, OthelloError> {
         match self {
             Self::Bitboard8(b) => b.apply(side, mv),
@@ -132,7 +133,7 @@ impl Board {
         }
     }
 
-    /// 両者とも合法手なし ( 終局) かどうか．
+    /// Whether neither side has any legal moves (terminal state).
     #[must_use]
     pub fn is_terminal(&self) -> bool {
         match self {
@@ -141,9 +142,11 @@ impl Board {
         }
     }
 
-    /// 終局時の勝者を返す．石数が多い色．同数なら `None` ( 引き分け)．
+    /// Returns the winner at the end of the game (the color with more
+    /// stones). Returns `None` for a draw (equal stone counts).
     ///
-    /// 終局でない場合も石数比較で「現時点での優勢色」を返す ( 慎重に使うこと)．
+    /// When called on a non-terminal state, this returns the currently
+    /// leading color by stone count; use with care.
     #[must_use]
     pub fn winner(&self) -> Option<Color> {
         let b = self.count(Color::Black);
@@ -155,7 +158,7 @@ impl Board {
         }
     }
 
-    /// テスト・初期化用にマスを直接書き換える．
+    /// Test/setup helper that overwrites a cell directly.
     pub fn set(&mut self, coord: Coord, color: Option<Color>) {
         match self {
             Self::Bitboard8(b) => b.set(coord, color),

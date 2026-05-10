@@ -1,4 +1,5 @@
-//! `transitions_from_record` / `_both_sides` の挙動テスト．
+//! Behavioural tests for `transitions_from_record` /
+//! `transitions_from_record_both_sides`.
 
 use chrono::TimeZone;
 use othello_core::{BoardSize, Color, Coord, GameState, Move};
@@ -42,7 +43,7 @@ fn move_entry(n: u32, side: Color, mv: Move) -> MoveEntry {
     }
 }
 
-/// 黒が勝つ簡易な棋譜 ( 8x8) を作る．
+/// Builds a simple 8x8 game record where Black wins.
 fn record_black_wins() -> GameRecord {
     let size = BoardSize::STANDARD;
     // 黒の典型的な合法手 ( d3 = (2, 3))
@@ -58,7 +59,7 @@ fn record_black_wins() -> GameRecord {
     }
 }
 
-/// 引き分けに終わる ( ことにした) 棋譜．
+/// Game record that (by construction) ends in a draw.
 fn record_draw() -> GameRecord {
     let size = BoardSize::STANDARD;
     let moves = vec![

@@ -1,4 +1,4 @@
-//! `UniformReplayBuffer` の動作テスト．
+//! Behavioural tests for `UniformReplayBuffer`.
 
 use ndarray::{Array1, Array3};
 use othello_core::Color;

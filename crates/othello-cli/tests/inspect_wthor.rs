@@ -1,12 +1,13 @@
-//! `inspect` サブコマンドの WTHOR ブランチに対する統合テスト．
+//! Integration tests for the WTHOR branch of the `inspect` subcommand.
 //!
-//! 自前で生成した小さな WTHOR ファイルを読み込み，期待される統計が出力されることを確認する．
+//! Reads a small WTHOR file generated in-place and verifies that the
+//! expected statistics are emitted.
 
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-/// 8x8 用の最小限ヘッダを作る．
+/// Builds a minimal 8x8 header.
 fn make_header(n_games: u32, year: u16) -> [u8; 16] {
     let mut h = [0u8; 16];
     h[4..8].copy_from_slice(&n_games.to_le_bytes());
@@ -16,7 +17,7 @@ fn make_header(n_games: u32, year: u16) -> [u8; 16] {
     h
 }
 
-/// `(row, col)` を WTHOR move コードに変換する．
+/// Converts `(row, col)` into a WTHOR move code.
 fn encode_move_byte(row: u8, col: u8) -> u8 {
     (row + 1) * 10 + (col + 1)
 }

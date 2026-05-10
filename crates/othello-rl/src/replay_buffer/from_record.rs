@@ -1,8 +1,10 @@
-//! GameRecord → Transition 列への変換．
+//! Conversion from `GameRecord` to a sequence of `Transition`s.
 //!
-//! self-play で生成した棋譜 ( JSON / GGF / WTHOR から復元した [`GameRecord`])
-//! を学習用の [`Transition`] 列に変換する．value は終局結果の自分視点
-//! ( 勝者 +1，敗者 -1，引き分け 0)．policy ターゲットは付与しない ( `None`)．
+//! Converts a [`GameRecord`] produced by self-play (or restored from
+//! JSON / GGF / WTHOR) into a list of [`Transition`]s for training. Each
+//! transition's `value` is the terminal result from the player's own
+//! viewpoint (+1 for the winner, -1 for the loser, 0 for a draw). No
+//! policy target is attached (`None`).
 
 use ndarray::Array1;
 use othello_core::{Color, GameState, Move};
@@ -14,13 +16,15 @@ use crate::replay_buffer::transition::Transition;
 
 use super::ReplayError;
 
-/// `GameRecord` を `Transition` 列に変換する ( 単一視点)．
+/// Converts a `GameRecord` into a sequence of `Transition`s from a single
+/// viewpoint.
 ///
-/// `view` で指定したプレイヤーの手番ごとに 1 件 transition を生成する．
-/// 生成される transition の `value` は当該プレイヤー視点の最終結果
-/// ( 勝ち +1，引き分け 0，負け -1) になる．
+/// Generates one transition per move played by the side specified by
+/// `view`. Each transition's `value` is set to the final result from the
+/// player's viewpoint (+1 win, 0 draw, -1 loss).
 ///
-/// 不正な棋譜 ( ルール違反な move) はコア層のエラーで弾かれる．
+/// Invalid records (rule-violating moves) are rejected via core-layer
+/// errors.
 pub fn transitions_from_record(
     record: &GameRecord,
     view: Color,
@@ -75,9 +79,11 @@ pub fn transitions_from_record(
     Ok(transitions)
 }
 
-/// 黒・白両視点の transition を返す ( self-play 学習で典型的)．
+/// Returns transitions from both Black and White viewpoints (the typical
+/// case for self-play training).
 ///
-/// 戻り値は黒視点・白視点を順に concat したベクタ．移動順は変えない．
+/// The result is the Black-viewpoint and White-viewpoint vectors
+/// concatenated in that order; the move order is preserved.
 pub fn transitions_from_record_both_sides(
     record: &GameRecord,
 ) -> Result<Vec<Transition>, ReplayError> {
@@ -104,8 +110,9 @@ fn legal_mask_for(state: &GameState, view: Color, size: othello_core::BoardSize)
     mask
 }
 
-/// `view` 視点での終局報酬を計算する．record の最終結果を優先し，
-/// 無ければ盤面石数から判定する．
+/// Computes the terminal reward from the `view` perspective. Prefers the
+/// record's final result; falls back to the on-board stone counts when no
+/// result is recorded.
 fn view_value(state: &GameState, view: Color, record: &GameRecord) -> f32 {
     if let Some(result) = record.metadata.result.as_ref() {
         return match result.winner {

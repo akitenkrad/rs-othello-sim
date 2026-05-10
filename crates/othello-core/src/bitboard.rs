@@ -1,17 +1,18 @@
-//! 8×8 専用の bitboard 実装．
+//! Bitboard implementation specialized to 8x8.
 //!
-//! 黒石・白石それぞれを `u64` 1 つで表現する．bit レイアウトは
-//! `bit_index = row * 8 + col` ( 行 0 列 0 = bit 0，行 7 列 7 = bit 63)．
+//! Each player's stones are stored in a single `u64`. The bit layout is
+//! `bit_index = row * 8 + col` (row 0 col 0 = bit 0, row 7 col 7 = bit 63).
 //!
-//! 合法手生成は 8 方向のシフトと AND/OR の連鎖で実装され，分岐を最小化している．
-//! 各方向のシフトは列マスク ( A 列・H 列) で wrap-around を防止する．
+//! Legal-move generation is implemented as a chain of eight directional
+//! shifts and AND/OR operations to minimize branching. Each direction uses a
+//! column mask (column A or column H) to prevent wrap-around.
 
 use crate::color::Color;
 use crate::coord::Coord;
 use crate::error::{IllegalMoveReason, OthelloError};
 use crate::mv::Move;
 
-/// 8×8 専用 bitboard．`black`，`white` がそれぞれ 64 マス分のビットを保持する．
+/// Bitboard specialized to 8x8. `black` and `white` each hold one bit per cell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Bitboard8 {
     black: u64,
@@ -22,9 +23,11 @@ pub struct Bitboard8 {
 // 列マスク ( wrap-around 防止用)
 // ------------------------------------------------------------------
 
-/// A 列 ( col = 0) を除外したマスク ( 全ての列 1〜7)．西方向シフトで使用．
+/// Mask excluding file A (`col = 0`); covers files 1..=7. Used for west-
+/// ward shifts.
 const NOT_A_FILE: u64 = 0xfefefefefefefefe;
-/// H 列 ( col = 7) を除外したマスク ( 全ての列 0〜6)．東方向シフトで使用．
+/// Mask excluding file H (`col = 7`); covers files 0..=6. Used for east-
+/// ward shifts.
 const NOT_H_FILE: u64 = 0x7f7f7f7f7f7f7f7f;
 
 // ------------------------------------------------------------------
@@ -73,9 +76,10 @@ const fn shift_sw(b: u64) -> u64 {
     (b & NOT_A_FILE) << 7
 }
 
-/// 8 方向の名前付きシフト関数のリスト．
+/// List of named shift functions for the eight directions.
 ///
-/// 全方向で同じ合法手生成アルゴリズム ( 5 回反復) を再利用する．
+/// Every direction reuses the same legal-move generation algorithm
+/// (five-iteration chain expansion).
 const SHIFT_FNS: [fn(u64) -> u64; 8] = [
     shift_n, shift_s, shift_e, shift_w, shift_ne, shift_nw, shift_se, shift_sw,
 ];
@@ -84,11 +88,15 @@ const SHIFT_FNS: [fn(u64) -> u64; 8] = [
 // 1 方向の合法手・反転計算
 // ------------------------------------------------------------------
 
-/// 設計書 §3.1.2 のアルゴリズムに従い，指定方向に置ける合法手のビットマスクを返す．
+/// Returns the bitmask of legal-move squares in the given direction,
+/// following the algorithm in design doc §3.1.2.
 ///
-/// 1. `candidates = shift(own) & opp` で「自石の隣接相手石」を初期化
-/// 2. 5 回反復で連鎖石を伸ばす ( 連続する相手石をすべて含める)
-/// 3. 最後にもう 1 回シフトして空マスとの AND を取れば「合法手位置」
+/// 1. Initialize `candidates = shift(own) & opp` (opponent stones adjacent
+///    to our stones).
+/// 2. Iterate five times to extend the chain (capturing every consecutive
+///    opponent stone).
+/// 3. One more shift, AND-ed with the empty squares, yields the legal-move
+///    positions.
 #[inline]
 fn legal_moves_dir(own: u64, opp: u64, shift: fn(u64) -> u64) -> u64 {
     let empty = !(own | opp);
@@ -102,9 +110,11 @@ fn legal_moves_dir(own: u64, opp: u64, shift: fn(u64) -> u64) -> u64 {
     shift(candidates) & empty
 }
 
-/// 指定方向で「target に置いた場合に反転する相手石」のビットマスクを返す．
+/// Returns the bitmask of opponent stones that would be flipped in the
+/// given direction if a stone were placed at `target`.
 ///
-/// 反対方向にビームを照射し，自石にぶつかるまでの相手石列を抽出する．
+/// Casts a beam in the opposite direction and collects the run of
+/// opponent stones until it hits one of our own.
 #[inline]
 fn flips_dir(target: u64, own: u64, opp: u64, shift: fn(u64) -> u64) -> u64 {
     // target から `shift` 方向に進んだ最初のマスが相手石でなければ反転なし．
@@ -128,17 +138,17 @@ fn flips_dir(target: u64, own: u64, opp: u64, shift: fn(u64) -> u64) -> u64 {
 }
 
 impl Bitboard8 {
-    /// 全マス空の盤面．
+    /// Empty board (all cells empty).
     #[inline]
     #[must_use]
     pub const fn empty() -> Self {
         Self { black: 0, white: 0 }
     }
 
-    /// 標準的な Othello 初期配置．
+    /// Standard Othello initial position.
     ///
-    /// 中央 4 マス: ( row=3, col=3) = 白，( row=3, col=4) = 黒，
-    /// ( row=4, col=3) = 黒，( row=4, col=4) = 白．
+    /// Center four cells: `(row=3, col=3) = white`, `(row=3, col=4) = black`,
+    /// `(row=4, col=3) = black`, `(row=4, col=4) = white`.
     #[inline]
     #[must_use]
     pub fn standard() -> Self {
@@ -150,23 +160,23 @@ impl Bitboard8 {
         b
     }
 
-    /// 黒石のビットマスクを返す．
+    /// Returns the bit mask of black stones.
     #[inline]
     #[must_use]
     pub const fn black(&self) -> u64 {
         self.black
     }
 
-    /// 白石のビットマスクを返す．
+    /// Returns the bit mask of white stones.
     #[inline]
     #[must_use]
     pub const fn white(&self) -> u64 {
         self.white
     }
 
-    /// 指定マスの色を返す．空マスなら `None`．
+    /// Returns the color at the given cell. `None` if empty.
     ///
-    /// 範囲外なら `None`．
+    /// Returns `None` if `coord` is out of range.
     #[inline]
     #[must_use]
     pub fn cell(&self, coord: Coord) -> Option<Color> {
@@ -183,9 +193,9 @@ impl Bitboard8 {
         }
     }
 
-    /// 指定マスを書き換える ( テスト・初期化用)．
+    /// Overwrites a single cell (for tests and setup).
     ///
-    /// 範囲外なら何もしない．
+    /// Out-of-range coordinates are silently ignored.
     pub fn set(&mut self, coord: Coord, color: Option<Color>) {
         if coord.row >= 8 || coord.col >= 8 {
             return;
@@ -201,7 +211,7 @@ impl Bitboard8 {
         }
     }
 
-    /// 指定色の石数を返す．
+    /// Returns the number of stones of the given color.
     #[inline]
     #[must_use]
     pub fn count(&self, color: Color) -> u32 {
@@ -211,14 +221,15 @@ impl Bitboard8 {
         }
     }
 
-    /// 空マス数を返す．
+    /// Returns the number of empty cells.
     #[inline]
     #[must_use]
     pub const fn empty_count(&self) -> u32 {
         (!(self.black | self.white)).count_ones()
     }
 
-    /// 指定色から見た own/opp ビットマスクのペアを返す．
+    /// Returns the `(own, opp)` bitmask pair from the given color's
+    /// perspective.
     #[inline]
     fn own_opp(&self, side: Color) -> (u64, u64) {
         match side {
@@ -227,7 +238,7 @@ impl Bitboard8 {
         }
     }
 
-    /// 指定色の合法手のビットマスクを返す．
+    /// Returns the bit mask of legal moves for the given side.
     #[inline]
     #[must_use]
     pub fn legal_mask(&self, side: Color) -> u64 {
@@ -239,10 +250,11 @@ impl Bitboard8 {
         mask
     }
 
-    /// 指定色の合法手を [`Move`] のリストとして返す．
+    /// Returns the legal moves for the given side as a `Vec<Move>`.
     ///
-    /// 合法手が 1 つもない場合は空 `Vec` を返す ( Pass 自体はここでは含めない；
-    /// Pass の判断は呼び出し側 `Board` で行う)．
+    /// Returns an empty `Vec` when no legal move exists. `Pass` itself is
+    /// not included here; the calling `Board` decides whether to issue a
+    /// pass.
     #[must_use]
     pub fn legal_moves(&self, side: Color) -> Vec<Move> {
         let mut mask = self.legal_mask(side);
@@ -257,9 +269,10 @@ impl Bitboard8 {
         out
     }
 
-    /// 指定色が指定座標に着手したときに反転する相手石のビットマスクを返す．
+    /// Returns the bit mask of opponent stones that would flip if `side`
+    /// played at `coord`.
     ///
-    /// 反転 0 マス ( 不正手) なら 0 を返す．
+    /// Returns 0 when the move flips no stones (i.e. the move is illegal).
     #[inline]
     #[must_use]
     pub fn flips_mask(&self, side: Color, coord: Coord) -> u64 {
@@ -279,10 +292,13 @@ impl Bitboard8 {
         total
     }
 
-    /// 着手を適用する．
+    /// Applies a move.
     ///
-    /// - `Move::Place(c)`: 反転する石が 1 つ以上あれば適用し，反転した座標 Vec を返す
-    /// - `Move::Pass`: 合法手が存在する場合は [`OthelloError::IllegalPass`]．無ければ何もせず空 Vec を返す
+    /// - `Move::Place(c)`: applies the move when at least one stone flips,
+    ///   returning the coordinates of the flipped stones.
+    /// - `Move::Pass`: returns [`OthelloError::IllegalPass`] when legal
+    ///   moves exist, otherwise leaves the board unchanged and returns an
+    ///   empty `Vec`.
     pub fn apply(&mut self, side: Color, mv: Move) -> Result<Vec<Coord>, OthelloError> {
         match mv {
             Move::Pass => {
@@ -331,7 +347,7 @@ impl Bitboard8 {
         }
     }
 
-    /// 両者とも合法手なし ( 終局) かどうか．
+    /// Whether neither side has any legal moves (terminal state).
     #[inline]
     #[must_use]
     pub fn is_terminal(&self) -> bool {
@@ -339,7 +355,7 @@ impl Bitboard8 {
     }
 }
 
-/// ビットマスクを `Vec<Coord>` に展開する ( 8×8 用)．
+/// Expands a bitmask into a `Vec<Coord>` (8x8).
 fn mask_to_coords(mut mask: u64) -> Vec<Coord> {
     let mut out = Vec::with_capacity(mask.count_ones() as usize);
     while mask != 0 {

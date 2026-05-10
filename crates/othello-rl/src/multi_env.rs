@@ -1,4 +1,5 @@
-//! [`OthelloMultiEnv`]: PettingZoo (AECEnv) 互換のマルチエージェント Othello 環境．
+//! [`OthelloMultiEnv`]: a PettingZoo (AECEnv) compatible multi-agent
+//! Othello environment.
 
 use crate::action_space::Action;
 use crate::error::RlError;
@@ -10,19 +11,19 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use std::collections::HashMap;
 
-/// マルチエージェントの ID．`"black"` または `"white"`．
+/// Multi-agent identifier. Either `"black"` or `"white"`.
 pub type AgentId = String;
 
-/// 環境設定．
+/// Environment configuration.
 #[derive(Debug, Clone)]
 pub struct MultiEnvConfig {
-    /// 盤面サイズ．
+    /// Board size.
     pub board_size: BoardSize,
-    /// 観測形式．
+    /// Observation format.
     pub observation_type: ObservationType,
-    /// 報酬モード．
+    /// Reward mode.
     pub reward_mode: RewardMode,
-    /// 打ち切り手数．
+    /// Truncation move-count threshold.
     pub max_steps: Option<u32>,
 }
 
@@ -37,7 +38,7 @@ impl Default for MultiEnvConfig {
     }
 }
 
-/// マルチエージェント環境．
+/// Multi-agent environment.
 pub struct OthelloMultiEnv {
     state: GameState,
     config: MultiEnvConfig,
@@ -50,23 +51,23 @@ pub struct OthelloMultiEnv {
     rng: ChaCha8Rng,
 }
 
-/// `step` の戻り値．
+/// Return value of [`OthelloMultiEnv::step`].
 #[derive(Debug, Clone)]
 pub struct MultiStepResult {
-    /// 各 agent の観測．
+    /// Per-agent observations.
     pub observations: HashMap<AgentId, Observation>,
-    /// 各 agent の報酬．
+    /// Per-agent rewards.
     pub rewards: HashMap<AgentId, f32>,
-    /// 各 agent の終局フラグ．
+    /// Per-agent termination flags.
     pub terminations: HashMap<AgentId, bool>,
-    /// 各 agent の打ち切りフラグ．
+    /// Per-agent truncation flags.
     pub truncations: HashMap<AgentId, bool>,
-    /// 補助情報．
+    /// Auxiliary information.
     pub info: super::env::StepInfo,
 }
 
 impl OthelloMultiEnv {
-    /// 設定から環境を作る．
+    /// Creates an environment from a configuration.
     #[must_use]
     pub fn new(config: MultiEnvConfig) -> Self {
         let state = GameState::standard(config.board_size).expect("valid board size");
@@ -91,7 +92,8 @@ impl OthelloMultiEnv {
         }
     }
 
-    /// 環境をリセットし全 agent の初期観測を返す．
+    /// Resets the environment and returns the initial observations for all
+    /// agents.
     pub fn reset(&mut self, seed: Option<u64>) -> HashMap<AgentId, Observation> {
         let s = seed.unwrap_or(0);
         self.rng = ChaCha8Rng::seed_from_u64(s);
@@ -110,13 +112,13 @@ impl OthelloMultiEnv {
         self.observations()
     }
 
-    /// 全 agent ID．
+    /// Returns all agent IDs.
     #[must_use]
     pub fn agents(&self) -> Vec<AgentId> {
         vec!["black".to_string(), "white".to_string()]
     }
 
-    /// 現在の手番 agent．
+    /// Returns the agent whose turn it currently is.
     #[must_use]
     pub fn current_agent(&self) -> AgentId {
         match self.state.side_to_move {
@@ -125,7 +127,7 @@ impl OthelloMultiEnv {
         }
     }
 
-    /// 指定 agent の観測．
+    /// Returns the observation for the given agent.
     #[must_use]
     pub fn observe(&self, agent: &str) -> Observation {
         let view = agent_to_color(agent);
@@ -137,7 +139,7 @@ impl OthelloMultiEnv {
         )
     }
 
-    /// 指定 agent の合法手マスク．
+    /// Returns the legal-move mask for the given agent.
     #[must_use]
     pub fn action_mask(&self, agent: &str) -> Array1<bool> {
         let view = agent_to_color(agent);
@@ -159,7 +161,7 @@ impl OthelloMultiEnv {
         mask
     }
 
-    /// 1 手適用する．現在の `current_agent` の手として扱う．
+    /// Applies one move, treated as the move of the current `current_agent`.
     pub fn step(&mut self, action: Action) -> Result<MultiStepResult, RlError> {
         action.validate(self.config.board_size)?;
         if self.state.is_terminal() {
@@ -235,28 +237,28 @@ impl OthelloMultiEnv {
         })
     }
 
-    /// 各 agent の報酬辞書を借用で返す．
+    /// Returns a reference to the per-agent reward map.
     #[inline]
     #[must_use]
     pub fn rewards(&self) -> &HashMap<AgentId, f32> {
         &self.rewards
     }
 
-    /// 各 agent の終局辞書を借用で返す．
+    /// Returns a reference to the per-agent termination map.
     #[inline]
     #[must_use]
     pub fn terminations(&self) -> &HashMap<AgentId, bool> {
         &self.terminations
     }
 
-    /// 各 agent の打ち切り辞書を借用で返す．
+    /// Returns a reference to the per-agent truncation map.
     #[inline]
     #[must_use]
     pub fn truncations(&self) -> &HashMap<AgentId, bool> {
         &self.truncations
     }
 
-    /// 内部状態の参照．
+    /// Returns a reference to the internal state.
     #[inline]
     #[must_use]
     pub fn state(&self) -> &GameState {
