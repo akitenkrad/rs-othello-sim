@@ -55,6 +55,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 6.7: `docs/replay-buffer.md` documenting the Rust API, Python API,
   Transition schema, sum-tree internals, and an AlphaZero-style training
   loop sketch.
+- 6.9: Reorganized documentation. The root README is compressed to a
+  one-screen overview (intro, demo placeholder, install, quick start,
+  docs index, license). New `docs/` files cover getting started,
+  CLI usage, TUI guide, self-play, record formats, Python bindings,
+  tools, benchmarks, and contributing. Existing architecture / external-
+  engines / nn-evaluator / replay-buffer docs are cross-linked.
+- 6.9: `docs/assets/` placeholder with capture instructions for the
+  three TUI demo GIFs (tui-play, tui-replay, tui-observe).
 
 ### Changed
 

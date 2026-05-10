@@ -3,13 +3,13 @@
 This document explains the internal layout of `rs-othello-sim`: how the
 crates depend on each other, how the board representation is chosen at
 runtime, what the MCTS player does (including the Phase 6.2 tree-reuse
-behaviour), and how evaluators and batch runners plug into the rest of
-the system.
+behaviour), and how evaluators, batch runners, the NN crate, and the
+replay buffer plug into the rest of the system.
 
 It is the engineering counterpart to the high-level design document at
 `設計書/Othello_シミュレータ設計書.md`. Whereas the design document
 captures intent and decision history, this file describes what the
-codebase actually does after Phases 1-6.2.
+codebase actually does after Phases 1–6.7.
 
 ## Crate Dependency Graph
 
@@ -25,6 +25,9 @@ graph LR
     ENG --> TUI["othello-tui"]
     RL --> CLI
     RL --> PY["othello-py"]
+    PLR --> NN["othello-nn"]
+    NN --> CLI
+    IO --> RL
 ```
 
 Dependencies flow from leaves (`othello-core`) up toward user-facing
@@ -33,12 +36,23 @@ required by its direct dependents:
 
 - `othello-core` — types, rules, board representations.
 - `othello-io` — readers and writers for GGF, JSON, WTHOR, JSONL.
-- `othello-player` — `Player` / `Evaluator` traits and concrete players.
+- `othello-player` — `Player` / `Evaluator` traits and concrete
+  players (Random, Greedy, Human, MCTS, ExternalEngine). See
+  [external-engines.md](external-engines.md) for the subprocess
+  driver.
 - `othello-engine` — game loop, history snapshots, batch runner.
-- `othello-rl` — Gymnasium and PettingZoo compatible environments.
+- `othello-rl` — Gymnasium and PettingZoo compatible environments
+  plus the [replay buffer](replay-buffer.md) (Phase 6.7). It depends
+  on `othello-io` so transitions can be built from saved records.
+- `othello-nn` — Candle-backed policy/value evaluator
+  (Phase 6.4). Sits next to `othello-player`, plugs in via the same
+  `Player` and `Evaluator` traits, and is only linked by
+  `othello-cli`. See [nn-evaluator.md](nn-evaluator.md).
 - `othello-tui` — ratatui terminal frontend.
-- `othello-cli` — clap-driven CLI binary.
-- `othello-py` — PyO3 bindings.
+- `othello-cli` — clap-driven CLI binary; the only crate that links
+  Candle.
+- `othello-py` — PyO3 bindings exposing `OthelloEnv`,
+  `OthelloMultiEnv`, and `ReplayBuffer` to Python.
 
 ## Hybrid Board Representation
 
@@ -138,8 +152,50 @@ pub trait Evaluator {
 visit counts captured at the end of its most recent `select_move` call.
 The values sum to ~1.0 and live in `[0, 1]`. Consumers (e.g., the TUI
 Observe-mode evaluator overlay introduced in Phase 5) read them via
-`Player::evaluator(&mut self) -> Option<&mut dyn Evaluator>`. NN-based
-evaluators (Phase 6.4) will plug in through the same trait.
+`Player::evaluator(&mut self) -> Option<&mut dyn Evaluator>`. The NN
+evaluator (Phase 6.4) plugs in through the same trait — see
+[nn-evaluator.md](nn-evaluator.md) for the IO schema, supported weight
+formats (safetensors / ONNX), and the CLI integration.
+
+## othello-nn (Phase 6.4)
+
+`othello-nn` lives in its own crate so that Candle's heavy dependency
+tree (gemm, half, candle-core / candle-nn / candle-onnx) does not
+leak into `othello-player` (and therefore into every crate that
+depends on it). The crate exposes:
+
+- `CandleModel` — a small AlphaZero-style ResNet (3-channel input,
+  policy head over `H*W + 1` actions, scalar value head). Loaders:
+  `from_safetensors`, `random_init`.
+- `OnnxModel` — `candle_onnx`-driven loader for ONNX checkpoints.
+- `NnEvaluator` — implements both `othello_player::Player` and
+  `othello_player::Evaluator`. Caches the post-mask, normalised
+  policy in `last_policy` so the TUI Observe overlay can read it
+  exactly the same way it reads MCTS visit counts.
+
+`othello-cli::player_spec_with_nn::build_player` is the single place
+where Candle is linked. `PlayerSpec::try_build_player` returns
+`SpecError::NeedsNnBackend` for `nn:` SPECs so consumers that should
+not link Candle (e.g. `othello-py`) fail cleanly.
+
+## othello-rl::replay_buffer (Phase 6.7)
+
+`othello-rl` hosts a uniform / prioritized experience replay buffer
+under `replay_buffer/`. The buffers share a `ReplayBuffer` trait so
+generic training loops do not need to branch on backend.
+
+- `UniformReplayBuffer` — circular FIFO with uniform sampling.
+- `PrioritizedReplayBuffer` — proportional PER backed by a
+  `SumTree` for `O(log N)` priority lookups, with importance-sampling
+  weights and a configurable `beta` schedule.
+- `transitions_from_record[_both_sides]` — converts a `GameRecord`
+  (any reader format) into per-ply `Transition`s including the
+  3-channel observation, action, terminal value, and legal mask.
+
+The Python wrapper in `othello-py` calls into the same Rust types
+through PyO3 with numpy interop. See
+[replay-buffer.md](replay-buffer.md) for the full schema and a
+training-loop sketch.
 
 ## BatchRunner and ProgressCallback
 
