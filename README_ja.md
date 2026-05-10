@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/assets/tui-replay.gif" alt="rs-othello-sim TUI Replay モードのデモ" width="780">
+  <img src="docs/assets/demo.gif" alt="rs-othello-sim TUI のデモ" width="780">
 </p>
 
 ---

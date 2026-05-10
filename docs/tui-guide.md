@@ -128,12 +128,11 @@ review`.
 
 ## Demo GIFs
 
-The repository expects three GIFs under `docs/assets/` that
-demonstrate each mode:
+The README's hero demo lives at `docs/assets/demo.gif`. Optional
+per-mode captures can be added under the same directory:
 
-- `tui-play.gif`
-- `tui-replay.gif`
-- `tui-observe.gif`
+- `tui-play.gif` — Play mode
+- `tui-observe.gif` — Observe mode
 
 See [`docs/assets/README.md`](assets/README.md) for capture
 instructions (macOS screen recording or asciinema + agg).

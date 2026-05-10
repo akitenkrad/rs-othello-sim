@@ -104,10 +104,9 @@ TUI のレンダリングは [insta](https://insta.rs/) のスナップショッ
 
 ## デモ GIF
 
-リポジトリには各モードを示す GIF を `docs/assets/` 配下に置く想定です:
+ルート README に埋め込むメインのデモは `docs/assets/demo.gif` です．モード別キャプチャを追加する場合は同ディレクトリに以下の名前で配置:
 
-- `tui-play.gif`
-- `tui-replay.gif`
-- `tui-observe.gif`
+- `tui-play.gif` — Play モード
+- `tui-observe.gif` — Observe モード
 
 撮影手順は [`docs/assets/README.md`](../assets/README.md) ( macOS の画面収録，または asciinema + agg ) を参照してください．
