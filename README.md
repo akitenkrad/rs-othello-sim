@@ -19,6 +19,7 @@ The implementation is staged across five phases (see design document §10).
 | Phase 3 | TUI, JSONL logger, WTHOR reader, `convert` / `inspect` subcommands | Done |
 | Phase 4 | RL environments (`othello-rl`), Python bindings (`othello-py`), `selfplay` batch runner, `BatchRunner`, MCTS player, TUI Observe mode | Done |
 | Phase 5 | External engine integration, `tools/` Python visualization / analysis / TensorBoard converter, indicatif progress bars, Evaluator overlay | Done |
+| Phase 6 (in progress) | 6.1 real-engine smoke test, 6.2 MCTS tree reuse, 6.4 Candle-based NN evaluator | In progress |
 
 ## Crates
 
@@ -30,6 +31,7 @@ crates/
 ├── othello-engine/      # GameEngine, full-snapshot GameHistory, Replayer, BatchRunner (rayon, ProgressCallback)
 ├── othello-rl/          # Gymnasium / PettingZoo compatible environments
 ├── othello-tui/         # ratatui frontend (Play / Replay / Observe modes; Evaluator overlay in Observe)
+├── othello-nn/          # Candle policy/value evaluator (Phase 6.4)
 ├── othello-cli/         # `othello-cli` binary (play / simulate / replay / convert / inspect / selfplay / benchmark / observe)
 └── othello-py/          # PyO3 bindings (`maturin develop` to install)
 ```
@@ -124,7 +126,13 @@ random[:seed=N]
 greedy
 mcts:N[,c=F][,seed=M][,depth=D]
 external:PATH[,protocol=gtp|ntest][,timeout=SEC][,arg=VAL,arg=VAL,...]
+nn:safetensors:PATH[,temperature=F][,deterministic][,seed=N]
+nn:onnx:PATH[,temperature=F][,deterministic][,seed=N]
 ```
+
+The `nn:` variants load a Candle policy/value model (Phase 6.4) and use it as
+both `Player` and `Evaluator`. See [`docs/nn-evaluator.md`](docs/nn-evaluator.md)
+for the IO schema, supported weight formats, and CLI examples.
 
 ### Self-play batch runner
 

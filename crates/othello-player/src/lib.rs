@@ -31,7 +31,7 @@ pub mod traits;
 pub use greedy::GreedyPlayer;
 pub use human::HumanPlayer;
 pub use mcts::{MctsConfig, MctsPlayer};
-pub use player_spec::{PlayerSpec, parse_player_spec, spec_name, spec_params};
+pub use player_spec::{NnBackend, NnSpec, PlayerSpec, parse_player_spec, spec_name, spec_params};
 pub use random::RandomPlayer;
 pub use traits::{Evaluator, Player, PlayerError};
 

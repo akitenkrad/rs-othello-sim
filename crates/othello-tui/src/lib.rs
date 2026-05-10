@@ -161,6 +161,10 @@ pub struct ObserveConfig {
 }
 
 /// Observe モードを起動する ( AI 対戦観戦)．
+///
+/// `Nn` バリアントは本クレートからは構築できない ( Candle 依存を避けるため)．
+/// `Nn` を含む SPEC を扱う場合は `othello-cli` 側で先に Player を構築し，
+/// [`run_observe_with_players`] を呼ぶこと．
 pub fn run_observe(config: ObserveConfig) -> Result<()> {
     use othello_core::Color;
     use othello_player::player_spec;
@@ -182,6 +186,10 @@ pub fn run_observe(config: ObserveConfig) -> Result<()> {
                 max_rollout_depth,
             },
             external @ PlayerSpec::External { .. } => external,
+            PlayerSpec::Nn(_) => panic!(
+                "PlayerSpec::Nn must be constructed via othello-cli; \
+                 use run_observe_with_players from the CLI wrapper"
+            ),
         };
         overridden.build_player(color)
     }
@@ -194,18 +202,34 @@ pub fn run_observe(config: ObserveConfig) -> Result<()> {
         Color::White,
         config.seed.wrapping_add(0x9E37_79B9),
     );
+    run_observe_with_players(
+        config.board_size,
+        black,
+        white,
+        black_name,
+        white_name,
+        config.auto_delay_ms,
+    )
+}
+
+/// 既に構築済の `Box<dyn Player>` を渡して Observe モードを起動する．
+///
+/// `othello-cli` から `Nn` バリアントを扱うために用意したエントリポイント．
+pub fn run_observe_with_players(
+    board_size: BoardSize,
+    black: Box<dyn othello_player::Player>,
+    white: Box<dyn othello_player::Player>,
+    black_name: String,
+    white_name: String,
+    auto_delay_ms: u64,
+) -> Result<()> {
     let backend = ObserveBackend {
         black,
         white,
         names: (black_name, white_name),
     };
     let mut terminal = setup_terminal()?;
-    let result = run_observe_loop(
-        &mut terminal,
-        config.board_size,
-        backend,
-        config.auto_delay_ms,
-    );
+    let result = run_observe_loop(&mut terminal, board_size, backend, auto_delay_ms);
     teardown_terminal(&mut terminal)?;
     result
 }

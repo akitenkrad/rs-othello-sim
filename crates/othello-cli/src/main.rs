@@ -1,6 +1,7 @@
 //! `othello-cli` バイナリエントリポイント．
 
 mod commands;
+pub mod player_spec_with_nn;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand, ValueEnum};

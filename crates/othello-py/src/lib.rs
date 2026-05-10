@@ -60,7 +60,9 @@ fn parse_reward_mode(s: &str) -> PyResult<RewardMode> {
 fn build_opponent(spec: &str, color: Color) -> PyResult<Box<dyn Player>> {
     let parsed = parse_player_spec(spec)
         .map_err(|e| PyValueError::new_err(format!("invalid opponent spec: {e}")))?;
-    Ok(parsed.build_player(color))
+    parsed
+        .try_build_player(color)
+        .map_err(|e| PyValueError::new_err(format!("cannot build opponent: {e}")))
 }
 
 fn observation_to_py<'py>(py: Python<'py>, obs: Observation) -> PyResult<Bound<'py, PyAny>> {

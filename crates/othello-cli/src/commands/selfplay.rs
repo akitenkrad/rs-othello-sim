@@ -206,35 +206,22 @@ pub fn run(args: Args) -> Result<()> {
 /// SPEC + seed から `(black_player, white_player)` を生成する factory．
 ///
 /// 各ゲームの seed は `BatchRunner` から渡される値に，SPEC の seed を XOR して撹拌する．
+/// `Nn` バリアント ( Phase 6.4) は `othello-cli` の wrapper を経由する．
 fn make_factory(
     black_spec: &PlayerSpec,
     white_spec: &PlayerSpec,
     seed: u64,
 ) -> (Box<dyn Player>, Box<dyn Player>) {
-    let black = build_with_seed_override(black_spec, Color::Black, seed);
-    let white = build_with_seed_override(white_spec, Color::White, seed.wrapping_add(0x9E37_79B9));
+    let black =
+        crate::player_spec_with_nn::build_with_seed_override(black_spec, Color::Black, seed)
+            .unwrap_or_else(|e| panic!("failed to build black player: {e}"));
+    let white = crate::player_spec_with_nn::build_with_seed_override(
+        white_spec,
+        Color::White,
+        seed.wrapping_add(0x9E37_79B9),
+    )
+    .unwrap_or_else(|e| panic!("failed to build white player: {e}"));
     (black, white)
-}
-
-fn build_with_seed_override(spec: &PlayerSpec, color: Color, seed: u64) -> Box<dyn Player> {
-    let overridden = match spec.clone() {
-        PlayerSpec::Random { seed: s } => PlayerSpec::Random { seed: s ^ seed },
-        PlayerSpec::Greedy => PlayerSpec::Greedy,
-        PlayerSpec::Mcts {
-            simulations,
-            exploration,
-            seed: s,
-            max_rollout_depth,
-        } => PlayerSpec::Mcts {
-            simulations,
-            exploration,
-            seed: Some(s.unwrap_or(0) ^ seed),
-            max_rollout_depth,
-        },
-        // 外部エンジンには seed の概念がないのでそのまま使う．
-        PlayerSpec::External { .. } => spec.clone(),
-    };
-    overridden.build_player(color)
 }
 
 #[cfg(test)]

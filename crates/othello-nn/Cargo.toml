@@ -1,0 +1,29 @@
+[package]
+name = "othello-nn"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Neural-network policy/value evaluator for rs-othello-sim (Phase 6.4)"
+
+[dependencies]
+othello-core = { workspace = true }
+othello-player = { workspace = true }
+othello-rl = { workspace = true }
+ndarray = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+rand = { workspace = true }
+rand_chacha = { workspace = true }
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+candle-onnx = { workspace = true }
+# half >= 2.5 exposes rand_distr 0.5 traits that conflict with candle 0.7's
+# rand_distr 0.4. Pin to 2.4.x so the sample-distribution traits resolve.
+half = "=2.4"
+
+[dev-dependencies]
+proptest = { workspace = true }
+othello-engine = { workspace = true }

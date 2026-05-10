@@ -28,12 +28,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 6.2: `docs/architecture.md` describing crate dependencies, hybrid board
   representation, MCTS internals (including tree-reuse), the `Evaluator` trait,
   and the `BatchRunner` / `ProgressCallback` integration.
+- 6.4: New `othello-nn` crate with Candle-based NN evaluator. `NnEvaluator`
+  implements both `Player` and `Evaluator` so it can drive games and feed the
+  TUI overlay. `CandleModel::from_safetensors` and `OnnxModel::from_path`
+  cover the two main weight formats; `CandleModel::random_init` is provided
+  for tests since no trained weights ship in this phase.
+- 6.4: `nn:safetensors:PATH[,temperature=F,deterministic,seed=N]` and
+  `nn:onnx:PATH[,...]` PlayerSpec variants. Construction is delegated to
+  `othello-cli::player_spec_with_nn::build_player` so `othello-player` does
+  not depend on Candle.
+- 6.4: `PlayerSpec::try_build_player` (fallible) and `SpecError::NeedsNnBackend`
+  for callers that should not link Candle. `PlayerSpec::build_player` keeps
+  its existing signature and panics on `Nn` variants with a clear message
+  pointing at the CLI wrapper.
+- 6.4: `othello_tui::run_observe_with_players` accepts pre-built
+  `Box<dyn Player>` instances so the TUI can host NN players without taking
+  a dependency on Candle.
+- 6.4: `docs/nn-evaluator.md` describing the IO schema, supported formats,
+  CLI usage, and the relation to the existing `Evaluator` trait.
 
 ### Changed
 
 - 6.2: `crates/othello-player` now depends on the workspace `tracing` crate so
   tree-reuse fallback paths can emit `tracing::warn!` / `tracing::debug!` logs
   on state mismatch instead of panicking.
+- 6.4: `othello-cli` now depends on `othello-nn` and `candle-core`. Other
+  crates are unaffected.
+- 6.4: `othello-py::build_opponent` switches from `PlayerSpec::build_player`
+  to `try_build_player` so unsupported `Nn` SPECs surface as a Python
+  `ValueError` instead of panicking.
 
 ## [0.1.0-phase5] - 2026-05-09
 

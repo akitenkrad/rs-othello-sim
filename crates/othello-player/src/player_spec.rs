@@ -7,6 +7,8 @@
 //! greedy
 //! mcts:N[,c=F][,seed=M][,depth=D]
 //! external:PATH[,protocol=gtp|ntest][,timeout=SEC][,arg=VAL,...]
+//! nn:safetensors:PATH[,temperature=F][,deterministic][,seed=N]
+//! nn:onnx:PATH[,temperature=F][,deterministic][,seed=N]
 //! ```
 //!
 //! - `mcts:N` は `simulations=N` の MCTS を指定する．
@@ -16,6 +18,12 @@
 //! - `external:PATH` は外部エンジンプロセス．`protocol` は `gtp`( デフォルト) / `ntest`．
 //!   `arg=VAL` は複数指定で順番にコマンドライン引数になる．
 //!   `timeout` は 1 手あたりの秒数 ( デフォルト 30)．
+//! - `nn:safetensors:PATH` / `nn:onnx:PATH` は NN ベース評価器 (Phase 6.4)．構築には
+//!   `othello-nn` クレートが必要なため，本クレートではパースのみを担当し，実際の
+//!   `Box<dyn Player>` 構築は `othello-cli::player_spec_with_nn::build_player` で行う．
+//!   - `temperature=F` は softmax 温度 ( デフォルト 1.0)．
+//!   - `deterministic` を指定すると argmax 選択 ( 値なし bool)．
+//!   - `seed=N` で乱数 seed を固定する ( 再現性)．
 //!
 //! ## 例
 //!
@@ -26,6 +34,8 @@
 //! - `mcts:500,c=1.5,seed=42`
 //! - `external:/usr/local/bin/edax,protocol=ntest,timeout=10`
 //! - `external:./engines/egaroucid,protocol=gtp,arg=--level,arg=1`
+//! - `nn:safetensors:./model.safetensors,deterministic`
+//! - `nn:onnx:./policy.onnx,temperature=0.5,seed=7`
 
 use crate::external::Protocol;
 use crate::{
@@ -56,6 +66,46 @@ pub enum SpecError {
     /// 認識できない種別．
     #[error("unsupported player kind: {0:?}")]
     UnsupportedKind(String),
+    /// `nn:...` の構築は本クレートの責務外．呼び出し側 ( `othello-cli`) で
+    /// `othello-nn` を使って構築すること．
+    #[error("nn player requires the `othello-nn` backend; use `othello-cli` build_player")]
+    NeedsNnBackend,
+}
+
+/// NN 評価器のバックエンド種別．
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NnBackend {
+    /// Candle ネイティブの safetensors ファイル．
+    Safetensors,
+    /// ONNX ファイル．
+    Onnx,
+}
+
+impl NnBackend {
+    /// 文字列表記．
+    #[inline]
+    #[must_use]
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Safetensors => "safetensors",
+            Self::Onnx => "onnx",
+        }
+    }
+}
+
+/// `nn:safetensors:PATH[,...]` / `nn:onnx:PATH[,...]` の SPEC パース結果．
+#[derive(Debug, Clone, PartialEq)]
+pub struct NnSpec {
+    /// バックエンド種別．
+    pub backend: NnBackend,
+    /// 重みファイルのパス．
+    pub path: PathBuf,
+    /// softmax 温度 ( `None` で 1.0)．
+    pub temperature: Option<f32>,
+    /// argmax 選択にする場合 true．
+    pub deterministic: bool,
+    /// 乱数 seed．
+    pub seed: Option<u64>,
 }
 
 /// プレイヤー仕様 ( パース結果)．
@@ -90,13 +140,34 @@ pub enum PlayerSpec {
         /// 起動引数．
         args: Vec<String>,
     },
+    /// `nn:safetensors:PATH[,...]` / `nn:onnx:PATH[,...]` ( Phase 6.4)．
+    ///
+    /// 実際の `Box<dyn Player>` への変換は `othello-cli` の wrapper で行う ( 本クレートは
+    /// Candle に依存しないため [`PlayerSpec::build_player`] は [`SpecError::NeedsNnBackend`]
+    /// を返すだけ)．
+    Nn(NnSpec),
 }
 
 impl PlayerSpec {
-    /// SPEC を `Box<dyn Player>` に変換する．
+    /// SPEC を `Box<dyn Player>` に変換する ( 既存 API)．
+    ///
+    /// **注意**: `Nn` バリアントに対しては panic する．`Nn` を扱う場合は
+    /// `othello-cli` の `player_spec_with_nn::build_player` を経由するか，
+    /// [`PlayerSpec::try_build_player`] を使うこと．
     #[must_use]
     pub fn build_player(&self, color: Color) -> Box<dyn Player> {
         build_player(self, color)
+    }
+
+    /// SPEC を `Box<dyn Player>` に変換する ( fallible 版)．
+    ///
+    /// `Nn` バリアントには本クレートでは対応できないため [`SpecError::NeedsNnBackend`]
+    /// を返す．`othello-nn` を import している呼び出し側が対応する．
+    pub fn try_build_player(&self, color: Color) -> Result<Box<dyn Player>, SpecError> {
+        match self {
+            PlayerSpec::Nn(_) => Err(SpecError::NeedsNnBackend),
+            other => Ok(build_player(other, color)),
+        }
     }
 }
 
@@ -104,10 +175,19 @@ impl PlayerSpec {
 ///
 /// `mcts:N[,...]` のように先頭が数値の場合は `simulations=N` として扱う．
 /// `external:PATH[,...]` のように先頭がパス文字列の場合は `command=PATH` として扱う．
+/// `nn:safetensors:PATH[,...]` / `nn:onnx:PATH[,...]` は `nn:` を最初に剥がしてから
+/// バックエンド種別 + パス + オプションをパースする．
 pub fn parse_player_spec(input: &str) -> Result<PlayerSpec, SpecError> {
     let trimmed = input.trim();
     if trimmed.is_empty() {
         return Err(SpecError::Format("empty player spec".into()));
+    }
+    // `nn:...` は別経路でパースする ( 二段ヘッダ)．
+    if let Some(rest) = trimmed
+        .strip_prefix("nn:")
+        .or_else(|| trimmed.strip_prefix("NN:"))
+    {
+        return parse_nn_spec(rest);
     }
     let (kind, rest) = match trimmed.split_once(':') {
         Some((k, r)) => (k, Some(r)),
@@ -236,7 +316,98 @@ fn parse_optional_u64(
     }
 }
 
+/// `nn:` を剥がした残り ( 例: `safetensors:./model.safetensors,deterministic`) をパースする．
+fn parse_nn_spec(rest: &str) -> Result<PlayerSpec, SpecError> {
+    // 残りは `<backend>:<path>[,k=v|flag]*` の形．backend 名は `safetensors` か `onnx`．
+    let (backend_str, after_backend) = rest.split_once(':').ok_or_else(|| {
+        SpecError::Format("nn requires a backend: nn:safetensors:PATH or nn:onnx:PATH".into())
+    })?;
+    let backend = match backend_str.trim().to_ascii_lowercase().as_str() {
+        "safetensors" => NnBackend::Safetensors,
+        "onnx" => NnBackend::Onnx,
+        other => {
+            return Err(SpecError::InvalidParam {
+                key: "backend".into(),
+                value: other.to_string(),
+                reason: "expected `safetensors` or `onnx`".into(),
+            });
+        }
+    };
+
+    // パスとオプションを分割．カンマで切るが先頭セグメントがパスとして扱われる．
+    let mut parts = after_backend.split(',');
+    let path_str = parts
+        .next()
+        .ok_or_else(|| SpecError::Format("nn requires a path: nn:<backend>:PATH".into()))?
+        .trim();
+    if path_str.is_empty() {
+        return Err(SpecError::Format("nn path is empty".into()));
+    }
+    let path = PathBuf::from(path_str);
+
+    let mut temperature: Option<f32> = None;
+    let mut deterministic = false;
+    let mut seed: Option<u64> = None;
+
+    for kv in parts {
+        let kv = kv.trim();
+        if kv.is_empty() {
+            continue;
+        }
+        if let Some((k, v)) = kv.split_once('=') {
+            let key = k.trim();
+            let val = v.trim();
+            match key {
+                "temperature" => {
+                    let t: f32 = val.parse().map_err(|e| SpecError::InvalidParam {
+                        key: "temperature".into(),
+                        value: val.into(),
+                        reason: format!("{e}"),
+                    })?;
+                    if !(t.is_finite() && t > 0.0) {
+                        return Err(SpecError::InvalidParam {
+                            key: "temperature".into(),
+                            value: val.into(),
+                            reason: "must be finite and > 0".into(),
+                        });
+                    }
+                    temperature = Some(t);
+                }
+                "seed" => {
+                    let s: u64 = val.parse().map_err(|e| SpecError::InvalidParam {
+                        key: "seed".into(),
+                        value: val.into(),
+                        reason: format!("{e}"),
+                    })?;
+                    seed = Some(s);
+                }
+                other => {
+                    return Err(SpecError::Format(format!(
+                        "unknown nn parameter: {other:?}"
+                    )));
+                }
+            }
+        } else if kv.eq_ignore_ascii_case("deterministic") {
+            deterministic = true;
+        } else {
+            return Err(SpecError::Format(format!("invalid nn token: {kv:?}")));
+        }
+    }
+
+    Ok(PlayerSpec::Nn(NnSpec {
+        backend,
+        path,
+        temperature,
+        deterministic,
+        seed,
+    }))
+}
+
 /// `PlayerSpec` から `Box<dyn Player>` を生成する．
+///
+/// **注意**: `Nn` バリアントを渡すと panic する．`Nn` を扱う場合は
+/// `othello-cli::player_spec_with_nn::build_player` を経由するか，
+/// [`PlayerSpec::try_build_player`] を使うこと．
 #[must_use]
 pub fn build_player(spec: &PlayerSpec, color: Color) -> Box<dyn Player> {
     match spec {
@@ -273,6 +444,13 @@ pub fn build_player(spec: &PlayerSpec, color: Color) -> Box<dyn Player> {
             };
             Box::new(ExternalEnginePlayer::new(color, cfg))
         }
+        PlayerSpec::Nn(_) => {
+            panic!(
+                "PlayerSpec::Nn cannot be built from othello-player; \
+                 use othello-cli::player_spec_with_nn::build_player or \
+                 PlayerSpec::try_build_player"
+            );
+        }
     }
 }
 
@@ -284,6 +462,7 @@ pub fn spec_name(spec: &PlayerSpec) -> &'static str {
         PlayerSpec::Greedy => "GreedyPlayer",
         PlayerSpec::Mcts { .. } => "MctsPlayer",
         PlayerSpec::External { .. } => "ExternalEnginePlayer",
+        PlayerSpec::Nn(_) => "NnEvaluator",
     }
 }
 
@@ -342,6 +521,28 @@ pub fn spec_params(spec: &PlayerSpec) -> serde_json::Value {
                     args.iter().cloned().map(serde_json::Value::from).collect(),
                 ),
             );
+            serde_json::Value::Object(m)
+        }
+        PlayerSpec::Nn(spec) => {
+            let mut m = serde_json::Map::new();
+            m.insert(
+                "backend".into(),
+                serde_json::Value::from(spec.backend.as_str()),
+            );
+            m.insert(
+                "path".into(),
+                serde_json::Value::from(spec.path.display().to_string()),
+            );
+            if let Some(t) = spec.temperature {
+                m.insert("temperature".into(), serde_json::Value::from(t as f64));
+            }
+            m.insert(
+                "deterministic".into(),
+                serde_json::Value::from(spec.deterministic),
+            );
+            if let Some(s) = spec.seed {
+                m.insert("seed".into(), serde_json::Value::from(s));
+            }
             serde_json::Value::Object(m)
         }
     }
@@ -497,6 +698,84 @@ mod tests {
     fn rejects_bad_kv() {
         // `nokv` は positional 扱いが許されるのは先頭のみ
         assert!(parse_player_spec("random:nokv").is_err());
+    }
+
+    #[test]
+    fn parse_nn_safetensors_basic() {
+        let s = parse_player_spec("nn:safetensors:./model.safetensors").unwrap();
+        match s {
+            PlayerSpec::Nn(spec) => {
+                assert_eq!(spec.backend, NnBackend::Safetensors);
+                assert_eq!(spec.path, PathBuf::from("./model.safetensors"));
+                assert_eq!(spec.temperature, None);
+                assert!(!spec.deterministic);
+                assert_eq!(spec.seed, None);
+            }
+            _ => panic!("expected Nn"),
+        }
+    }
+
+    #[test]
+    fn parse_nn_onnx_full() {
+        let s = parse_player_spec("nn:onnx:/tmp/policy.onnx,temperature=0.5,deterministic,seed=7")
+            .unwrap();
+        match s {
+            PlayerSpec::Nn(spec) => {
+                assert_eq!(spec.backend, NnBackend::Onnx);
+                assert_eq!(spec.path, PathBuf::from("/tmp/policy.onnx"));
+                assert_eq!(spec.temperature, Some(0.5));
+                assert!(spec.deterministic);
+                assert_eq!(spec.seed, Some(7));
+            }
+            _ => panic!("expected Nn"),
+        }
+    }
+
+    #[test]
+    fn parse_nn_unknown_backend() {
+        let r = parse_player_spec("nn:tflite:./model.bin");
+        assert!(matches!(r, Err(SpecError::InvalidParam { .. })));
+    }
+
+    #[test]
+    fn parse_nn_missing_path() {
+        // `nn:safetensors` ( パス無し) → split_once(':') 失敗で Format エラー
+        let r = parse_player_spec("nn:safetensors");
+        assert!(matches!(r, Err(SpecError::Format(_))));
+    }
+
+    #[test]
+    fn parse_nn_unknown_param() {
+        let r = parse_player_spec("nn:safetensors:./m.safetensors,temperatuer=0.5");
+        assert!(matches!(r, Err(SpecError::Format(_))));
+    }
+
+    #[test]
+    fn parse_nn_negative_temperature() {
+        let r = parse_player_spec("nn:safetensors:./m.safetensors,temperature=-1.0");
+        assert!(matches!(r, Err(SpecError::InvalidParam { .. })));
+    }
+
+    #[test]
+    fn try_build_player_nn_returns_err() {
+        let s = parse_player_spec("nn:safetensors:./m.safetensors").unwrap();
+        let r = s.try_build_player(Color::Black);
+        assert!(matches!(r, Err(SpecError::NeedsNnBackend)));
+    }
+
+    #[test]
+    fn spec_name_nn() {
+        let s = parse_player_spec("nn:safetensors:./m.safetensors").unwrap();
+        assert_eq!(spec_name(&s), "NnEvaluator");
+    }
+
+    #[test]
+    fn spec_params_nn_includes_backend() {
+        let s = parse_player_spec("nn:onnx:./m.onnx,deterministic,seed=7").unwrap();
+        let v = spec_params(&s);
+        assert_eq!(v["backend"], serde_json::Value::from("onnx"));
+        assert_eq!(v["deterministic"], serde_json::Value::from(true));
+        assert_eq!(v["seed"], serde_json::Value::from(7u64));
     }
 
     #[test]

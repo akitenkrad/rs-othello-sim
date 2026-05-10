@@ -8,6 +8,7 @@ members = [
     "crates/othello-cli",
     "crates/othello-tui",
     "crates/othello-rl",
+    "crates/othello-nn",
     "crates/othello-py",
 ]
 
@@ -26,6 +27,11 @@ othello-io = { path = "crates/othello-io" }
 othello-engine = { path = "crates/othello-engine" }
 othello-tui = { path = "crates/othello-tui" }
 othello-rl = { path = "crates/othello-rl" }
+othello-nn = { path = "crates/othello-nn" }
+
+candle-core = "0.7"
+candle-nn = "0.7"
+candle-onnx = "0.7"
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

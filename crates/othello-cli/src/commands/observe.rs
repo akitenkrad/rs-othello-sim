@@ -1,9 +1,10 @@
 //! `observe` サブコマンド: AI 同士の対戦を TUI で観戦する．
 
+use crate::player_spec_with_nn::build_with_seed_override;
 use anyhow::{Context, Result};
 use clap::Args as ClapArgs;
-use othello_core::BoardSize;
-use othello_player::player_spec::parse_player_spec;
+use othello_core::{BoardSize, Color};
+use othello_player::player_spec::{parse_player_spec, spec_name};
 
 /// `othello-cli observe` の引数．
 #[derive(Debug, ClapArgs)]
@@ -37,13 +38,23 @@ pub fn run(args: Args) -> Result<()> {
     let white_spec = parse_player_spec(&args.white)
         .with_context(|| format!("invalid --white: {:?}", args.white))?;
     let seed = args.seed.unwrap_or(0);
-    let cfg = othello_tui::ObserveConfig {
-        board_size: size,
-        black_spec,
-        white_spec,
-        seed,
-        auto_delay_ms: args.auto_delay,
-    };
-    othello_tui::run_observe(cfg)?;
+
+    // CLI 側で Player を構築 ( Nn を含む SPEC でも対応可能)．
+    let black = build_with_seed_override(&black_spec, Color::Black, seed)
+        .with_context(|| "failed to build black player")?;
+    let white = build_with_seed_override(&white_spec, Color::White, seed.wrapping_add(0x9E37_79B9))
+        .with_context(|| "failed to build white player")?;
+
+    let black_name = spec_name(&black_spec).to_string();
+    let white_name = spec_name(&white_spec).to_string();
+
+    othello_tui::run_observe_with_players(
+        size,
+        black,
+        white,
+        black_name,
+        white_name,
+        args.auto_delay,
+    )?;
     Ok(())
 }
