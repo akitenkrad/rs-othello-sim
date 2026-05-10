@@ -44,7 +44,6 @@ PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop --release
 - [Replay buffer](docs/replay-buffer.md)
 - [Architecture](docs/architecture.md)
 - [Benchmarks](docs/benchmarks.md)
-- [Contributing](docs/contributing.md)
 
 ## License
 

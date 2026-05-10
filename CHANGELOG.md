@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - Phase 6 (in progress)
 
+### Removed
+
+- `docs/contributing.md` and `docs/ja/contributing.md` (the
+  contributing guide is no longer maintained as part of the docs
+  set). The README docs index entry is dropped accordingly.
+
 ### Added
 
 - `docs/external-data.md` (English) and `docs/ja/external-data.md`
@@ -74,8 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one-screen overview (intro, demo placeholder, install, quick start,
   docs index, license). New `docs/` files cover getting started,
   CLI usage, TUI guide, self-play, record formats, Python bindings,
-  tools, benchmarks, and contributing. Existing architecture / external-
-  engines / nn-evaluator / replay-buffer docs are cross-linked.
+  tools, and benchmarks. Existing architecture / external-engines /
+  nn-evaluator / replay-buffer docs are cross-linked.
 - 6.9: `docs/assets/` placeholder with capture instructions for the
   three TUI demo GIFs (tui-play, tui-replay, tui-observe).
 - 6.9: Japanese translations of all 13 documentation files under

@@ -43,7 +43,6 @@ PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop --release
 - [Replay buffer](docs/ja/replay-buffer.md)
 - [アーキテクチャ](docs/ja/architecture.md)
 - [ベンチマーク](docs/ja/benchmarks.md)
-- [コントリビュート](docs/ja/contributing.md)
 
 ## ライセンス
 
