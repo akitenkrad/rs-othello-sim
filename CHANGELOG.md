@@ -46,6 +46,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a dependency on Candle.
 - 6.4: `docs/nn-evaluator.md` describing the IO schema, supported formats,
   CLI usage, and the relation to the existing `Evaluator` trait.
+- 6.7: Replay buffer in `othello-rl::replay_buffer`. `UniformReplayBuffer`
+  and `PrioritizedReplayBuffer` (PER + SumTree) share a `ReplayBuffer`
+  trait. `transitions_from_record[_both_sides]` constructs transitions
+  from JSON / GGF / WTHOR game records. The Python `ReplayBuffer` class
+  in `othello-py` exposes `push` / `sample` / `update_priorities` with
+  numpy interop.
+- 6.7: `docs/replay-buffer.md` documenting the Rust API, Python API,
+  Transition schema, sum-tree internals, and an AlphaZero-style training
+  loop sketch.
 
 ### Changed
 

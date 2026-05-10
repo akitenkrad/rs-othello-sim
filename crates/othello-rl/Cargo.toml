@@ -11,6 +11,7 @@ description = "Othello reinforcement-learning environment ( Gymnasium / PettingZ
 [dependencies]
 othello-core = { workspace = true }
 othello-player = { workspace = true }
+othello-io = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -20,3 +21,4 @@ ndarray = { workspace = true }
 
 [dev-dependencies]
 proptest = { workspace = true }
+chrono = { workspace = true }

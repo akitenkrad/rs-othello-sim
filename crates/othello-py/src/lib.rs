@@ -15,16 +15,18 @@
 #![allow(clippy::useless_conversion)]
 
 use ndarray::{Array1, Array3};
-use numpy::{IntoPyArray, PyArray1};
+use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1, PyReadonlyArray3};
 use othello_core::{BoardSize, Color};
 use othello_player::{Player, player_spec::parse_player_spec};
 use othello_rl::{
     Action, EnvConfig, MultiEnvConfig, Observation, ObservationType, OthelloEnv, OthelloMultiEnv,
-    RewardMode,
+    PrioritizedReplayBuffer, ReplayBuffer, RewardMode, Transition, UniformReplayBuffer,
 };
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
 
 fn parse_color(s: &str) -> PyResult<Color> {
     match s.to_ascii_lowercase().as_str() {
@@ -316,11 +318,243 @@ impl PyOthelloMultiEnv {
     }
 }
 
+/// Internal storage discriminating between buffer backends so we can keep
+/// access to backend-specific methods (e.g. PER's [`PrioritizedReplayBuffer::beta`]).
+enum ReplayInner {
+    Uniform(UniformReplayBuffer),
+    Prioritized(PrioritizedReplayBuffer),
+}
+
+impl ReplayInner {
+    fn as_trait_mut(&mut self) -> &mut dyn ReplayBuffer {
+        match self {
+            ReplayInner::Uniform(b) => b,
+            ReplayInner::Prioritized(b) => b,
+        }
+    }
+    fn as_trait(&self) -> &dyn ReplayBuffer {
+        match self {
+            ReplayInner::Uniform(b) => b,
+            ReplayInner::Prioritized(b) => b,
+        }
+    }
+}
+
+/// Numpy-friendly Replay buffer for RL / self-play training.
+///
+/// Two backends are exposed via the `kind` constructor argument:
+/// - `"uniform"` uses [`UniformReplayBuffer`] (FIFO ring + uniform sampling).
+/// - `"prioritized"` uses [`PrioritizedReplayBuffer`] (PER + SumTree).
+///
+/// `sample` returns a Python `dict` with numpy arrays so trainers can feed
+/// the batch directly into a torch / jax model. Use `update_priorities` after
+/// computing TD errors when running PER.
+#[pyclass(name = "ReplayBuffer", module = "othello_sim")]
+pub struct PyReplayBuffer {
+    inner: ReplayInner,
+    rng: ChaCha8Rng,
+}
+
+#[pymethods]
+impl PyReplayBuffer {
+    /// Create a replay buffer.
+    ///
+    /// - `capacity` : maximum number of transitions retained.
+    /// - `kind` : `"uniform"` (default) or `"prioritized"`.
+    /// - `alpha` / `beta` / `beta_increment` / `epsilon` : PER hyperparameters
+    ///   (ignored for uniform).
+    /// - `seed` : RNG seed for sampling.
+    #[new]
+    #[pyo3(signature = (
+        capacity,
+        kind = "uniform",
+        alpha = 0.6,
+        beta = 0.4,
+        beta_increment = 0.001,
+        epsilon = 1e-6,
+        seed = None,
+    ))]
+    pub fn new(
+        capacity: usize,
+        kind: &str,
+        alpha: f32,
+        beta: f32,
+        beta_increment: f32,
+        epsilon: f32,
+        seed: Option<u64>,
+    ) -> PyResult<Self> {
+        if capacity == 0 {
+            return Err(PyValueError::new_err("capacity must be > 0"));
+        }
+        let lower = kind.to_ascii_lowercase();
+        let inner = match lower.as_str() {
+            "uniform" => ReplayInner::Uniform(UniformReplayBuffer::new(capacity)),
+            "prioritized" | "per" => {
+                let buf = PrioritizedReplayBuffer::new(capacity)
+                    .with_alpha(alpha)
+                    .with_beta(beta)
+                    .with_beta_increment(beta_increment)
+                    .with_epsilon(epsilon);
+                ReplayInner::Prioritized(buf)
+            }
+            other => {
+                return Err(PyValueError::new_err(format!(
+                    "kind must be 'uniform' or 'prioritized', got {other:?}"
+                )));
+            }
+        };
+        let rng = ChaCha8Rng::seed_from_u64(seed.unwrap_or(0));
+        Ok(Self { inner, rng })
+    }
+
+    /// Push one transition into the buffer.
+    ///
+    /// `observation` must be `(3, H, W)` float32, `legal_mask` must be `(H*W+1,)`
+    /// bool, and `policy` (optional) must be `(H*W+1,)` float32.
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (
+        observation,
+        action,
+        value,
+        legal_mask,
+        side,
+        move_number,
+        game_id,
+        policy = None,
+    ))]
+    pub fn push(
+        &mut self,
+        observation: PyReadonlyArray3<f32>,
+        action: u32,
+        value: f32,
+        legal_mask: PyReadonlyArray1<bool>,
+        side: &str,
+        move_number: u32,
+        game_id: &str,
+        policy: Option<PyReadonlyArray1<f32>>,
+    ) -> PyResult<()> {
+        let side_color = parse_color(side)?;
+        let obs_arr: Array3<f32> = observation.as_array().to_owned();
+        let mask_arr: Array1<bool> = legal_mask.as_array().to_owned();
+        let policy_arr: Option<Array1<f32>> = policy.map(|p| p.as_array().to_owned());
+        let t = Transition {
+            observation: obs_arr,
+            action,
+            policy: policy_arr,
+            value,
+            legal_mask: mask_arr,
+            side: side_color,
+            move_number,
+            game_id: game_id.to_string(),
+        };
+        self.inner.as_trait_mut().push(t);
+        Ok(())
+    }
+
+    /// Sample a batch and return it as a `dict` of numpy arrays.
+    pub fn sample<'py>(
+        &mut self,
+        py: Python<'py>,
+        batch_size: usize,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let batch = self
+            .inner
+            .as_trait_mut()
+            .sample(batch_size, &mut self.rng)
+            .map_err(|e| PyRuntimeError::new_err(format!("replay sample error: {e}")))?;
+        let dict = PyDict::new_bound(py);
+        dict.set_item("observations", batch.observations.into_pyarray_bound(py))?;
+        dict.set_item("actions", batch.actions.into_pyarray_bound(py))?;
+        dict.set_item("values", batch.values.into_pyarray_bound(py))?;
+        dict.set_item("legal_masks", batch.legal_masks.into_pyarray_bound(py))?;
+        match batch.policies {
+            Some(p) => dict.set_item("policies", p.into_pyarray_bound(py))?,
+            None => dict.set_item("policies", py.None())?,
+        }
+        let indices_arr: Array1<u64> = batch.indices.iter().map(|&i| i as u64).collect();
+        dict.set_item("indices", indices_arr.into_pyarray_bound(py))?;
+        match batch.weights {
+            Some(w) => dict.set_item("weights", w.into_pyarray_bound(py))?,
+            None => dict.set_item("weights", py.None())?,
+        }
+        Ok(dict)
+    }
+
+    /// Update PER priorities. `indices` and `priorities` must have equal length.
+    /// No-op for uniform buffers.
+    pub fn update_priorities(
+        &mut self,
+        indices: PyReadonlyArray1<u64>,
+        priorities: PyReadonlyArray1<f32>,
+    ) -> PyResult<()> {
+        let idx_view = indices.as_array();
+        let pri_view = priorities.as_array();
+        let idx: Vec<usize> = idx_view.iter().map(|&v| v as usize).collect();
+        let pri: Vec<f32> = pri_view.iter().copied().collect();
+        self.inner
+            .as_trait_mut()
+            .update_priorities(&idx, &pri)
+            .map_err(|e| PyRuntimeError::new_err(format!("update_priorities error: {e}")))?;
+        Ok(())
+    }
+
+    /// Number of transitions currently stored.
+    pub fn __len__(&self) -> usize {
+        self.inner.as_trait().len()
+    }
+
+    /// Capacity of the buffer.
+    #[getter]
+    pub fn capacity(&self) -> usize {
+        self.inner.as_trait().capacity()
+    }
+
+    /// True if the buffer is empty.
+    pub fn is_empty(&self) -> bool {
+        self.inner.as_trait().is_empty()
+    }
+
+    /// True if the buffer has reached `capacity`.
+    pub fn is_full(&self) -> bool {
+        self.inner.as_trait().is_full()
+    }
+
+    /// Drop all transitions.
+    pub fn clear(&mut self) {
+        self.inner.as_trait_mut().clear();
+    }
+
+    /// Returns `True` if this is a Prioritized Experience Replay buffer.
+    #[getter]
+    pub fn prioritized(&self) -> bool {
+        matches!(self.inner, ReplayInner::Prioritized(_))
+    }
+
+    /// Backend kind string: `"uniform"` or `"prioritized"`.
+    #[getter]
+    pub fn kind(&self) -> &'static str {
+        match self.inner {
+            ReplayInner::Uniform(_) => "uniform",
+            ReplayInner::Prioritized(_) => "prioritized",
+        }
+    }
+
+    /// Current `beta` value used for IS-weight bias correction.
+    /// Returns `None` for uniform buffers.
+    pub fn beta(&self) -> Option<f32> {
+        match &self.inner {
+            ReplayInner::Uniform(_) => None,
+            ReplayInner::Prioritized(b) => Some(b.beta()),
+        }
+    }
+}
+
 /// Module entry point.
 #[pymodule]
 fn othello_sim(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyOthelloEnv>()?;
     m.add_class::<PyOthelloMultiEnv>()?;
+    m.add_class::<PyReplayBuffer>()?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }

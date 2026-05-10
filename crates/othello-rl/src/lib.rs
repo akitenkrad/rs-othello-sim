@@ -41,6 +41,7 @@ pub mod env;
 pub mod error;
 pub mod multi_env;
 pub mod observation;
+pub mod replay_buffer;
 pub mod reward;
 
 pub use action_space::Action;
@@ -48,13 +49,18 @@ pub use env::{EnvConfig, OthelloEnv, StepInfo, StepResult};
 pub use error::RlError;
 pub use multi_env::{AgentId, MultiEnvConfig, MultiStepResult, OthelloMultiEnv};
 pub use observation::{Observation, ObservationType, make_observation};
+pub use replay_buffer::{
+    PrioritizedReplayBuffer, ReplayBuffer, ReplayError, SumTree, Transition, TransitionBatch,
+    UniformReplayBuffer, transitions_from_record, transitions_from_record_both_sides,
+};
 pub use reward::{DenseReward, RewardFn, RewardMode, SparseReward, make_reward_fn};
 
 /// よく使う型を一括で導入するための prelude．
 pub mod prelude {
     pub use crate::{
         Action, AgentId, DenseReward, EnvConfig, MultiEnvConfig, MultiStepResult, Observation,
-        ObservationType, OthelloEnv, OthelloMultiEnv, RewardFn, RewardMode, RlError, SparseReward,
-        StepInfo, StepResult,
+        ObservationType, OthelloEnv, OthelloMultiEnv, PrioritizedReplayBuffer, ReplayBuffer,
+        ReplayError, RewardFn, RewardMode, RlError, SparseReward, StepInfo, StepResult, Transition,
+        TransitionBatch, UniformReplayBuffer,
     };
 }

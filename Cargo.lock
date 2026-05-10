@@ -1347,6 +1347,8 @@ dependencies = [
  "othello-player",
  "othello-rl",
  "pyo3",
+ "rand 0.8.6",
+ "rand_chacha 0.3.1",
  "serde_json",
 ]
 
@@ -1354,8 +1356,10 @@ dependencies = [
 name = "othello-rl"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "ndarray",
  "othello-core",
+ "othello-io",
  "othello-player",
  "proptest",
  "rand 0.8.6",
