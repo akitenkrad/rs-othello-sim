@@ -1,48 +1,41 @@
-[English](python-rl.md) | [日本語](ja/python-rl.md)
+[English](../python-rl.md) | [日本語](python-rl.md)
 
-# Python bindings & RL
+# Python バインディング & RL
 
-`crates/othello-py` exposes the engine to Python through PyO3, with
-APIs that follow the [Gymnasium](https://gymnasium.farama.org/) and
-[PettingZoo](https://pettingzoo.farama.org/) conventions. The
-extension module is named `othello_sim`.
+`crates/othello-py` は PyO3 を介して Python に Engine を公開します． API は [Gymnasium](https://gymnasium.farama.org/) と [PettingZoo](https://pettingzoo.farama.org/) の慣例に従っています．拡張モジュール名は `othello_sim` です．
 
-The bindings cover three surfaces:
+バインディングは 3 つの面を持ちます:
 
-- `OthelloEnv` — single-agent (Gymnasium) wrapper.
-- `OthelloMultiEnv` — multi-agent (PettingZoo AECEnv) wrapper.
-- `ReplayBuffer` — uniform / prioritized experience replay buffer
-  (see [replay-buffer.md](replay-buffer.md)).
+- `OthelloEnv` — single-agent ( Gymnasium ) ラッパー．
+- `OthelloMultiEnv` — multi-agent ( PettingZoo AECEnv ) ラッパー．
+- `ReplayBuffer` — uniform / prioritized experience Replay buffer ( [replay-buffer.md](replay-buffer.md) を参照 ) ．
 
-## Install
+## インストール
 
-`maturin develop` builds the Rust extension and links it into the
-active Python environment.
+`maturin develop` は Rust 拡張をビルドし，アクティブな Python 環境にリンクします．
 
 ```bash
 cd crates/othello-py
 
-# Install maturin once
+# maturin を 1 回インストール
 pip install --user maturin
 
-# Forward-compatibility flag if your Python is newer than PyO3 supports
+# Python が PyO3 のサポート範囲より新しい場合の前方互換フラグ
 PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin develop --release
 ```
 
-The Rust workspace itself does not require Python; `cargo build
---workspace` succeeds without any Python toolchain.
+Rust ワークスペース自体は Python を必要としません． `cargo build --workspace` は Python ツールチェイン無しで成功します．
 
 ## `OthelloEnv` — single-agent
 
-Designed for SB3 / RLlib-style training where the learner controls
-one fixed color and the opponent is a fixed scripted strategy.
+学習側が固定の色を担当し，相手は固定スクリプト戦略という SB3 / RLlib スタイルの学習向けに設計されています．
 
 ```python
 import othello_sim
 
 env = othello_sim.OthelloEnv(
     board_size=8,
-    opponent="random:seed=1",   # Player spec (same grammar as the CLI)
+    opponent="random:seed=1",   # Player spec ( CLI と同じ文法 )
     observation_type="planes",  # "planes" | "flat" | "move_sequence"
     reward_mode="sparse",       # "sparse" | "dense"
     seed=42,
@@ -62,35 +55,28 @@ while True:
         break
 ```
 
-### Observation types
+### Observation の種類
 
 | `observation_type` | dtype  | shape                       |
 |--------------------|--------|-----------------------------|
 | `planes`           | float32| `(3, H, W)`                 |
 | `flat`             | float32| `(3 * H * W,)`              |
-| `move_sequence`    | uint32 | `(L,)` — `L` plies played   |
+| `move_sequence`    | uint32 | `(L,)` — `L` は経過 ply 数  |
 
-For `planes` / `flat` the channels are
-`[own_stones, opp_stones, legal_mask]`. The legal mask is all zeros
-when it is not the agent's turn (the env auto-resolves opponent
-moves before returning).
+`planes` / `flat` のチャネルは `[own_stones, opp_stones, legal_mask]` です．エージェントの手番でないとき legal mask は全 0 になります ( 環境側で相手手を自動解決してから返します ) ．
 
-`move_sequence` follows the Othello-GPT convention: each ply is
-`1 + row * W + col`, `0` for passes. Useful for transformer-style
-sequence models.
+`move_sequence` は Othello-GPT の慣例に従い，各 ply を `1 + row * W + col` ， パスは `0` で表します．Transformer 系列モデル向けです．
 
-### Reward modes
+### Reward モード
 
-| `reward_mode` | Per-step | Terminal |
+| `reward_mode` | 各ステップ | 終了時 |
 |---|---|---|
-| `sparse` | `0` | `+1 / 0 / -1` from agent's perspective |
+| `sparse` | `0` | エージェント視点で `+1 / 0 / -1` |
 | `dense` | `Δ stones / max_stones` | `+1 / 0 / -1` |
 
 ### Action mask + MaskablePPO
 
-The action space size is `H * W + 1` (Pass is the last index). The
-env returns an `action_mask` in `info`. To use it with
-[`sb3-contrib MaskablePPO`](https://sb3-contrib.readthedocs.io/):
+action space サイズは `H * W + 1` ( パスは末尾 ) ．環境は `info` に `action_mask` を入れて返します． [`sb3-contrib MaskablePPO`](https://sb3-contrib.readthedocs.io/) と組み合わせる例:
 
 ```python
 import gymnasium as gym
@@ -127,8 +113,7 @@ model.learn(100_000)
 
 ## `OthelloMultiEnv` — PettingZoo
 
-For self-play and multi-agent algorithms where both sides are
-controlled.
+両プレイヤーを制御する self-play や multi-agent アルゴリズム向けです．
 
 ```python
 from othello_sim import OthelloMultiEnv
@@ -146,14 +131,11 @@ while True:
         break
 ```
 
-Returned dicts are keyed by agent name. `obs_d` contains the
-just-played agent's next observation (after the opponent's auto-pass
-if applicable); the other entry is `None`.
+返り値の dict はエージェント名でキー付けされます． `obs_d` には今着手したエージェント側の次の observation ( 必要なら相手の自動パス処理後 ) が入ります．もう一方は `None` です．
 
 ## ReplayBuffer
 
-The Python wrapper around the Rust replay buffer is documented in
-detail in [replay-buffer.md](replay-buffer.md). Quick example:
+Rust の Replay buffer に対する Python ラッパーは [replay-buffer.md](replay-buffer.md) で詳述しています．簡単な例:
 
 ```python
 import numpy as np
@@ -177,13 +159,12 @@ batch = buf.sample(batch_size=64)
 #       indices / weights
 
 td = compute_td_errors(batch)                           # numpy float32
-buf.update_priorities(batch["indices"], np.abs(td))     # PER only
+buf.update_priorities(batch["indices"], np.abs(td))     # PER のみ
 ```
 
-## AlphaZero-style training (sketch)
+## AlphaZero 風学習 ( スケッチ )
 
-The full loop combines the multi-agent env, the replay buffer, the NN
-evaluator, and an external trainer. A minimal sketch:
+完全なループは multi-agent 環境，Replay buffer，NN evaluator，外部 trainer を組み合わせます．最小限のスケッチ:
 
 ```python
 import numpy as np
@@ -200,15 +181,15 @@ for episode in range(num_episodes):
         agent = env.current_agent()
         mask = env.action_mask(agent)
         obs = env.observe(agent)
-        # MCTS guided by your model. Returns visit-count target pi
-        # (length H*W+1) and the chosen action.
+        # 自分のモデルで MCTS を走らせ，visit-count target pi
+        # ( length H*W+1 ) と選択した action を返す．
         pi, action = run_mcts(obs, mask, model)
         trajectory.append((obs, action, mask, agent, pi))
         _, rew_d, term_d, _, _ = env.step(int(action))
         if all(term_d.values()):
             break
 
-    z = rew_d   # final terminal reward per side
+    z = rew_d   # 各サイドの最終報酬
     for i, (obs, action, mask, agent, pi) in enumerate(trajectory):
         buf.push(
             observation=obs, action=int(action),
@@ -227,16 +208,11 @@ for episode in range(num_episodes):
         # buf.update_priorities(batch["indices"], np.abs(td_errors))
 ```
 
-The `model` here is your own (PyTorch, JAX, …); training is left to
-the user. To deploy a checkpoint back into the Rust engine, export
-either safetensors or ONNX matching the IO schema and consume it via
-the `nn:` PlayerSpec — see [nn-evaluator.md](nn-evaluator.md).
+ここでの `model` は自前のもの ( PyTorch / JAX など ) で，学習部分はユーザに委ねられます．checkpoint を Rust Engine 側にデプロイするには，IO スキーマに合致する safetensors または ONNX を出力し， `nn:` PlayerSpec から消費します — [nn-evaluator.md](nn-evaluator.md) を参照してください．
 
-## See also
+## 関連項目
 
-- [Replay buffer](replay-buffer.md) — full API, sum-tree, PER details.
-- [NN evaluator](nn-evaluator.md) — the IO schema your trainer must
-  match to be loadable by `othello-cli`.
-- [Self-play & batch runs](self-play.md) — for generating training
-  data without touching Python.
-- `crates/othello-py/examples/` — runnable smoke tests.
+- [Replay buffer](replay-buffer.md) — 完全な API ， sum-tree ， PER の詳細．
+- [NN Evaluator](nn-evaluator.md) — `othello-cli` でロードできるよう Trainer が一致させるべき IO スキーマ．
+- [Self-play & バッチ実行](self-play.md) — Python に触らずに学習データを生成する方法．
+- `crates/othello-py/examples/` — 動作する smoke テスト群．

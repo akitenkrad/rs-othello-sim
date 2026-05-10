@@ -1,3 +1,5 @@
+[English](benchmarks.md) | [日本語](ja/benchmarks.md)
+
 # Benchmarks
 
 `rs-othello-sim` ships two flavours of performance measurement:

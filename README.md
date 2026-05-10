@@ -1,3 +1,5 @@
+[English](README.md) | [日本語](README_ja.md)
+
 # rs-othello-sim
 
 [![CI](https://img.shields.io/badge/CI-passing-brightgreen)](#)

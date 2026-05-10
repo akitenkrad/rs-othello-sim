@@ -1,3 +1,5 @@
+[English](cli-usage.md) | [日本語](ja/cli-usage.md)
+
 # CLI Usage
 
 `othello-cli` is the single binary that drives every non-TUI workflow:

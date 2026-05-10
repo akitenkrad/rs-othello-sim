@@ -1,3 +1,5 @@
+[English](record-formats.md) | [日本語](ja/record-formats.md)
+
 # Record Formats
 
 `rs-othello-sim` reads and writes several record formats, each

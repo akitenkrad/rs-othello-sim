@@ -1,3 +1,5 @@
+[English](self-play.md) | [日本語](ja/self-play.md)
+
 # Self-play & batch runs
 
 `othello-cli selfplay` orchestrates many games in parallel using

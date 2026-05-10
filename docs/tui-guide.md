@@ -1,3 +1,5 @@
+[English](tui-guide.md) | [日本語](ja/tui-guide.md)
+
 # TUI Guide
 
 `othello-tui` is a [ratatui](https://ratatui.rs/) frontend launched by

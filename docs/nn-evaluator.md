@@ -1,3 +1,5 @@
+[English](nn-evaluator.md) | [日本語](ja/nn-evaluator.md)
+
 # NN Evaluator (Phase 6.4)
 
 `rs-othello-sim` ships a neural-network policy/value evaluator under

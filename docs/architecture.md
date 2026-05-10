@@ -1,3 +1,5 @@
+[English](architecture.md) | [日本語](ja/architecture.md)
+
 # Architecture
 
 This document explains the internal layout of `rs-othello-sim`: how the

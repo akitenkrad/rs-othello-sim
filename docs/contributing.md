@@ -1,3 +1,5 @@
+[English](contributing.md) | [日本語](ja/contributing.md)
+
 # Contributing
 
 A short guide to the conventions used in this repository. See

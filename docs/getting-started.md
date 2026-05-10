@@ -1,3 +1,5 @@
+[English](getting-started.md) | [日本語](ja/getting-started.md)
+
 # Getting Started
 
 This page walks you from a fresh clone to a finished game in under five

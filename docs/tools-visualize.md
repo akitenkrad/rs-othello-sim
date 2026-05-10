@@ -1,3 +1,5 @@
+[English](tools-visualize.md) | [日本語](ja/tools-visualize.md)
+
 # Tools (visualize / analyze / TB)
 
 Three small Python packages live under `tools/` and form a `uv`

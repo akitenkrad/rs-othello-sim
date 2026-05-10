@@ -1,3 +1,5 @@
+[English](replay-buffer.md) | [日本語](ja/replay-buffer.md)
+
 # Replay Buffer
 
 `othello-rl` ships a Rust replay buffer plus a numpy-friendly Python wrapper

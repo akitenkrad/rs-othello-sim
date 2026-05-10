@@ -1,0 +1,108 @@
+[English](../tui-guide.md) | [日本語](tui-guide.md)
+
+# TUI ガイド
+
+`othello-tui` は [ratatui](https://ratatui.rs/) ベースのフロントエンドで，`othello-cli` の `play` / `replay` / `observe` サブコマンドから起動されます．3 つの異なるモードを持ちます:
+
+| モード | サブコマンド | 用途 |
+|---|---|---|
+| Play | `othello-cli play` ( TUI 版 ) | 同一ターミナルで人間 2 名が交互に着手 |
+| Replay | `othello-cli replay --file …` | 保存済みの棋譜を 1 手ずつ再生 |
+| Observe | `othello-cli observe …` | AI 同士の対局を Evaluator overlay 付きで観戦 |
+
+Observe モードの特徴は，現在手番の Player が `Evaluator` を実装している場合に，リアルタイムの Evaluator 情報を表示できる点です ( 現状 MCTS と `nn:` 系が対応 ) ．
+
+## レイアウト
+
+3 モード共通の骨格は次のとおりです:
+
+```
++------------------+----------------------+
+|                  | Players              |
+|                  | Black: …             |
+|     Board        | White: …             |
+|     ( 中央 )       +----------------------+
+|                  | Status / Help        |
+|                  | ( モード固有の行 )      |
+|                  +----------------------+
+|                  | Evaluator (Observe)  |
+|                  | move  visits  bar    |
+|                  +----------------------+
++------------------+----------------------+
+| フッターキーマップ                          |
++------------------------------------------+
+```
+
+Board パネルは 1 セル 1.5 × 1 ( 横 2 列 ) で描画され，石が丸く見えるようになっています．Black は `B` ， White は `W` ，現在手番の合法手はドットでハイライトされます．
+
+## Play モード
+
+`othello-cli play` を TUI フロントエンド付きでビルドした際に使用します．両プレイヤーが同じターミナルで交互に着手します．
+
+| キー | アクション |
+|---|---|
+| 矢印キー / `h j k l` | カーソル移動 |
+| `Enter` / `Space` | カーソル位置に着手 |
+| `p` | パス ( 合法手がないときのみ有効 ) |
+| `q` / `Esc` | 終了 |
+
+ステータスバーには現在手番，合法手数，カーソルが非合法マスにあるときの警告が表示されます．
+
+## Replay モード
+
+```bash
+othello-cli replay --file game.json --format json
+```
+
+棋譜全体を `Replayer` に読み込みます．各 ply のフルスナップショットを保持しているためナビゲーションは `O(1)` です．
+
+| キー | アクション |
+|---|---|
+| `→` / `l` | 1 手進む |
+| `←` / `h` | 1 手戻る |
+| `g` | 開始位置へ |
+| `G` | 終局位置へ |
+| `0`–`9` | バッファ式の "go to move N" ( 数字を入力 ) |
+| `q` / `Esc` | 終了 |
+
+ヘッダには `move N / TOTAL` とスコアが表示されます．メタデータ ( プレイヤー名，タイムスタンプ ) を含む棋譜は，右側の Players パネルに表示されます．
+
+## Observe モード
+
+```bash
+othello-cli observe --black mcts:500 --white greedy --auto-delay 500
+```
+
+両 AI を起動し対局を TUI で表示します． `--auto-delay 0` ( デフォルト ) では各 ply で `Space` 押下を待ちます． `--auto-delay 500` では 500 ms 後に次手を要求します．
+
+| キー | アクション |
+|---|---|
+| `Space` | 1 手進める ( 手動モード ) |
+| `q` / `Esc` | 終了 |
+
+**Evaluator overlay** は，現在手番の Player が `Player::evaluator()` を公開しているときに Players パネルの下に表示されます． `MctsPlayer` の場合，直近の `select_move` 終了時点で記録された正規化済みルート訪問数を，`NnEvaluator` の場合はマスク後・正規化済みのポリシーを表示します:
+
+```
+Evaluator (top 5)
+  D5    0.42  ███████░░░░░
+  E6    0.21  ████░░░░░░░░
+  F4    0.19  ███░░░░░░░░░
+  C5    0.10  ██░░░░░░░░░░
+  pass  0.08  █░░░░░░░░░░░
+```
+
+バーは最大値が幅いっぱいになるよう正規化されます． overlay は `select_move` から戻ってきた後にだけ更新され，探索中は何も表示されません．
+
+## スナップショットテスト
+
+TUI のレンダリングは [insta](https://insta.rs/) のスナップショットテスト ( `crates/othello-tui/tests/snapshot.rs` ) で固定されています．レイアウトを変える場合は `cargo insta review` でスナップショットを再生成してください．
+
+## デモ GIF
+
+リポジトリには各モードを示す GIF を `docs/assets/` 配下に置く想定です:
+
+- `tui-play.gif`
+- `tui-replay.gif`
+- `tui-observe.gif`
+
+撮影手順は [`docs/assets/README.md`](../assets/README.md) ( macOS の画面収録，または asciinema + agg ) を参照してください．

@@ -1,3 +1,5 @@
+[English](external-engines.md) | [日本語](ja/external-engines.md)
+
 # External Engines
 
 `rs-othello-sim` can drive third-party Othello engines as players via

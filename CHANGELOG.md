@@ -63,6 +63,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   engines / nn-evaluator / replay-buffer docs are cross-linked.
 - 6.9: `docs/assets/` placeholder with capture instructions for the
   three TUI demo GIFs (tui-play, tui-replay, tui-observe).
+- 6.9: Japanese translations of all 13 documentation files under
+  `docs/ja/`, plus `README_ja.md`. Every documentation file (English
+  and Japanese) now starts with an `[English] | [日本語]` switcher
+  pointing at its sibling.
 
 ### Changed
 
