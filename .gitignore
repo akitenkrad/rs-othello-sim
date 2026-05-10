@@ -45,3 +45,6 @@ __pycache__/
 build/
 dist/
 wheels/
+
+# Fetched real engines (Phase 6.1)
+/vendor/engines/

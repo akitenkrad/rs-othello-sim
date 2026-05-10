@@ -5,7 +5,15 @@ All notable changes to `rs-othello-sim` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] - Phase 6 (in progress)
+
+### Added
+
+- 6.1: `scripts/fetch_engines.sh` to fetch and build Edax / Egaroucid into `vendor/engines/`.
+- 6.1: `crates/othello-player/tests/real_engine.rs` integration tests (gated behind `#[ignore]`,
+  run with `cargo test -p othello-player --test real_engine -- --ignored`).
+- 6.1: `docs/external-engines.md` with engine setup, license notes, and PlayerSpec reference.
+- 6.1: `.gitignore` entry for `/vendor/engines/` so fetched binaries are not committed.
 
 ## [0.1.0-phase5] - 2026-05-09
 

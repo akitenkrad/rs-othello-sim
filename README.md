@@ -162,6 +162,10 @@ cargo run -p othello-cli -- observe \
 Note: under high `--threads` × `--num-games` settings, every game spawns its own engine
 subprocess. Be mindful of process limits and per-engine memory footprint.
 
+Optional: real engine binaries (Edax / Egaroucid) can be fetched via `scripts/fetch_engines.sh`
+for local smoke testing. See [`docs/external-engines.md`](docs/external-engines.md) for setup,
+license caveats, and the `cargo test --test real_engine -- --ignored` workflow.
+
 ### Benchmark
 
 ```bash
